@@ -1,0 +1,275 @@
+// ╔══════════════════════════════════════════════════════════════╗
+// ║   YEMRE HTF BIAS v1.0                                        ║
+// ║   4H Yüksek Zaman Dilimi Bias Göstergesi                     ║
+// ║   Strateji: ICT/SMC - BOS, OB, FVG, PD Zone, SMT            ║
+// ║                                                              ║
+// ║   WEBHOOK KURULUM:                                           ║
+// ║   1. TradingView → Alert Oluştur                             ║
+// ║   2. "Condition" → Bu indikatörden istediğin alerti seç      ║
+// ║   3. "Webhook URL" → http://<IP>:8080/webhook/tradingview    ║
+// ║   4. Alert Message (JSON):                                   ║
+// ║      {"symbol":"{{ticker}}","interval":"{{interval}}",       ║
+// ║       "close":"{{close}}","message":"HTF {{plot_0}}"}        ║
+// ╚══════════════════════════════════════════════════════════════╝
+//@version=5
+indicator("YEMRE HTF BIAS", overlay=true, max_boxes_count=50)
+
+// ─── AYARLAR ────────────────────────────────────────────────────
+var string G1 = "Semboller"
+var string G2 = "Kill Zone (UTC)"
+var string G3 = "Görünüm"
+
+i_refSymbol  = input.symbol("BINANCE:BTCUSDT",   "Referans (BTC)",  group=G1)
+i_usdtD      = input.symbol("CRYPTOCAP:USDT.D",  "USDT Dominance",  group=G1)
+i_tablePos   = input.string("top_right", "Tablo Konumu",
+                 options=["top_right","top_left","bottom_right","bottom_left"], group=G3)
+i_showBg     = input.bool(true, "Bias Arka Plan Rengi", group=G3)
+
+i_kzLondonS  = input.int(7,  "London Açılış Başlangıç", 0, 23, group=G2)
+i_kzLondonE  = input.int(10, "London Açılış Bitiş",     0, 23, group=G2)
+i_kzNYS      = input.int(13, "NY Açılış Başlangıç",     0, 23, group=G2)
+i_kzNYE      = input.int(16, "NY Açılış Bitiş",         0, 23, group=G2)
+i_kzAsiaS    = input.int(0,  "Asia Başlangıç",           0, 23, group=G2)
+i_kzAsiaE    = input.int(3,  "Asia Bitiş",               0, 23, group=G2)
+
+var string G4 = "4H Yapı"
+i_pivLen     = input.int(5, "Pivot Bar Sayısı", minval=2, maxval=10, group=G4)
+
+// ─── RENKLER ────────────────────────────────────────────────────
+C_BULL   = #00c853
+C_BEAR   = #ff1744
+C_WARN   = #ff9100
+C_NEUT   = #9e9e9e
+C_TEXT   = color.new(#e0e0e0, 0)
+C_HEAD   = color.new(#150030, 0)
+C_ROW_A  = color.new(#0a0a14, 88)
+C_ROW_B  = color.new(#0f0f1e, 88)
+C_FRAME  = color.new(#6644cc, 0)
+C_BORDER = color.new(#2a2a44, 0)
+
+rowBg(r) =>
+    r % 2 == 0 ? C_ROW_A : C_ROW_B
+
+// ─── 4H YAPI FONKSİYONU ─────────────────────────────────────────
+// Pivot tabanlı BOS ve CHoCH tespiti
+f_htfStruct() =>
+    ph = ta.pivothigh(high, i_pivLen, i_pivLen)
+    pl = ta.pivotlow(low,  i_pivLen, i_pivLen)
+    var float lastPH  = na
+    var float lastPL  = na
+    var float prev2PH = na
+    var float prev2PL = na
+    var int   sDir    = 0  // 1=bullish struct, -1=bearish, 0=unknown
+    if not na(ph)
+        prev2PH := lastPH
+        lastPH  := ph
+    if not na(pl)
+        prev2PL := lastPL
+        lastPL  := pl
+    if not na(prev2PH) and not na(prev2PL)
+        if lastPH > prev2PH and lastPL > prev2PL
+            sDir := 1
+        else if lastPH < prev2PH and lastPL < prev2PL
+            sDir := -1
+    rawBull   = not na(lastPH) and close > lastPH
+    rawBear   = not na(lastPL) and close < lastPL
+    bosBull   = sDir ==  1 and rawBull   // trend yönünde kırılım
+    bosBear   = sDir == -1 and rawBear
+    chochBull = sDir == -1 and rawBull   // yapı değişimi: bear→bull
+    chochBear = sDir ==  1 and rawBear   // yapı değişimi: bull→bear
+    [bosBull, bosBear, chochBull, chochBear, lastPH, lastPL]
+
+// ─── EXTERNAL DATA ───────────────────────────────────────────────
+btcClose     = request.security(i_refSymbol, timeframe.period, close)
+btcClose5    = request.security(i_refSymbol, timeframe.period, close[5])
+btcHigh20    = request.security(i_refSymbol, timeframe.period, ta.highest(high[1], 20))
+btcLow20     = request.security(i_refSymbol, timeframe.period, ta.lowest(low[1], 20))
+
+usdtClose    = request.security(i_usdtD, timeframe.period, close)
+usdtClose5   = request.security(i_usdtD, timeframe.period, close[5])
+
+dHigh        = request.security(syminfo.tickerid, "D", high,  lookahead=barmerge.lookahead_on)
+dLow         = request.security(syminfo.tickerid, "D", low,   lookahead=barmerge.lookahead_on)
+wHigh        = request.security(syminfo.tickerid, "W", high,  lookahead=barmerge.lookahead_on)
+wLow         = request.security(syminfo.tickerid, "W", low,   lookahead=barmerge.lookahead_on)
+
+[h4BosBull, h4BosBear, h4ChochBull, h4ChochBear, h4LastPH, h4LastPL] = request.security(syminfo.tickerid, "240", f_htfStruct())
+
+// ─── AMD: Accumulation / Manipulation / Distribution ────────────
+dRange    = dHigh - dLow
+amdRaw    = dRange > 0 ? math.round((close - dLow) / dRange * 100) : 50
+amdLabel  = amdRaw < 35 ? "ACCUM " : amdRaw < 65 ? "MANIP " : "DIST "
+amdStr    = amdLabel + str.tostring(amdRaw) + "%"
+amdCol    = amdRaw < 35 ? color.new(C_BULL,0) : amdRaw < 65 ? color.new(C_WARN,0) : color.new(C_BEAR,0)
+
+// ─── PD ZONE: Premium / Equilibrium / Discount ──────────────────
+wRange    = wHigh - wLow
+pdRaw     = wRange > 0 ? (close - wLow) / wRange * 100 : 50
+pdStr     = pdRaw > 62 ? "PREMIUM" : pdRaw < 38 ? "DISCOUNT" : "EQ"
+pdCol     = pdRaw > 62 ? color.new(C_BEAR,0) : pdRaw < 38 ? color.new(C_BULL,0) : color.new(C_WARN,0)
+
+// ─── OTE: Optimal Trade Entry (Fib 61.8–78.6%) ──────────────────
+var float lastSH = na
+var float lastSL = na
+swLen = 10
+if high[swLen] == ta.highest(high, swLen * 2 + 1)
+    lastSH := high[swLen]
+if low[swLen] == ta.lowest(low, swLen * 2 + 1)
+    lastSL := low[swLen]
+
+inOTE = false
+if not na(lastSH) and not na(lastSL)
+    fRange = math.abs(lastSH - lastSL)
+    isBull = lastSH > lastSL
+    ote61  = isBull ? lastSH - fRange * 0.618 : lastSH + fRange * 0.618
+    ote78  = isBull ? lastSH - fRange * 0.786 : lastSH + fRange * 0.786
+    inOTE  := close >= math.min(ote61, ote78) and close <= math.max(ote61, ote78)
+
+oteStr    = inOTE ? "OTE ✓" : "—"
+oteCol    = inOTE ? color.new(C_BULL,0) : color.new(C_NEUT,0)
+
+// ─── BTC CORRELATION ────────────────────────────────────────────
+btcBull   = btcClose > btcClose5
+myBull    = close > close[5]
+corrStr   = btcBull and myBull ? "ALIGNED ↑" : not btcBull and not myBull ? "ALIGNED ↓" : "DIVERGED"
+corrCol   = btcBull == myBull ? (btcBull ? color.new(C_BULL,0) : color.new(C_BEAR,0)) : color.new(C_WARN,0)
+
+// ─── USDT.D ─────────────────────────────────────────────────────
+usdtRise  = usdtClose > usdtClose5
+usdtStr   = usdtRise ? "RISING ↑" : "FALLING ↓"
+usdtCol   = usdtRise ? color.new(C_BEAR,0) : color.new(C_BULL,0)
+
+// ─── SMT: Smart Money Technique (Divergence) ────────────────────
+myNewH    = high > ta.highest(high[1], 20)
+myNewL    = low  < ta.lowest(low[1], 20)
+btcNewH   = btcClose > btcHigh20
+btcNewL   = btcClose < btcLow20
+smtBear   = myNewH and not btcNewH
+smtBull   = myNewL and not btcNewL
+smtStr    = smtBear ? "BEAR" : smtBull ? "BULL" : "—"
+smtCol    = smtBear ? color.new(C_BEAR,0) : smtBull ? color.new(C_BULL,0) : color.new(C_NEUT,0)
+
+// ─── 4H STRUCTURE: BOS / CHoCH ──────────────────────────────────
+structStr = h4BosBull ? "BOS BULL ✓" : h4BosBear ? "BOS BEAR ✓" : h4ChochBull ? "CHoCH ↑" : h4ChochBear ? "CHoCH ↓" : "—"
+structCol = (h4BosBull or h4ChochBull) ? color.new(C_BULL,0) : (h4BosBear or h4ChochBear) ? color.new(C_BEAR,0) : color.new(C_NEUT,0)
+
+// ─── VWAP ───────────────────────────────────────────────────────
+vwapVal   = ta.vwap(hlc3)
+vwapStr   = str.tostring(math.round(vwapVal, 2))
+vwapCol   = close > vwapVal ? color.new(C_BULL,0) : color.new(C_BEAR,0)
+
+// ─── KILL ZONE ──────────────────────────────────────────────────
+h_utc     = hour(time, "UTC")
+inLondon  = h_utc >= i_kzLondonS and h_utc < i_kzLondonE
+inNY      = h_utc >= i_kzNYS     and h_utc < i_kzNYE
+inAsia    = h_utc >= i_kzAsiaS   and h_utc < i_kzAsiaE
+inKZ      = inLondon or inNY or inAsia
+kzStr     = inLondon ? "LONDON KZ" : inNY ? "NY KZ" : inAsia ? "ASIA KZ" : "OFF_KZ"
+kzCol     = (inLondon or inNY) ? color.new(C_BULL,0) : inAsia ? color.new(C_WARN,0) : color.new(C_NEUT,0)
+
+// ─── BIAS SCORE (0–9) ────────────────────────────────────────────
+sc = 0
+sc += h4BosBull ? 2 : h4ChochBull ? 1 : 0  // BOS=2pt, CHoCH=1pt
+sc += not usdtRise   ? 1 : 0   // USDT.D düşüyor
+sc += btcBull        ? 1 : 0   // BTC pozitif
+sc += myBull         ? 1 : 0   // Trend yukarı
+sc += close > vwapVal ? 1 : 0  // VWAP üstünde
+sc += pdRaw < 50     ? 1 : 0   // Discount zone
+sc += smtBull        ? 1 : 0   // SMT Bullish
+sc += inKZ           ? 1 : 0   // Kill Zone aktif
+
+biasScore = sc
+scoreStr  = str.tostring(biasScore) + "/9"
+scoreCol  = biasScore >= 7 ? color.new(C_BULL,0) : biasScore <= 3 ? color.new(C_BEAR,0) : color.new(C_WARN,0)
+
+// ─── FINAL BIAS ─────────────────────────────────────────────────
+finalBias  = biasScore >= 6 ? "BULLISH" : biasScore <= 3 ? "BEARISH" : "RANGING"
+finalCol   = finalBias == "BULLISH" ? color.new(C_BULL,0) : finalBias == "BEARISH" ? color.new(C_BEAR,0) : color.new(C_WARN,0)
+trigActive = inKZ and biasScore >= 6
+trigStr    = trigActive ? "ACTIVE ✓" : "off"
+trigCol    = trigActive ? color.new(C_BULL,0) : color.new(C_NEUT,0)
+
+// ─── ALERT CONDITIONS ───────────────────────────────────────────
+// TradingView → Alert → Webhook URL → http://<IP>:8080/webhook/tradingview
+// Alert Message: {"symbol":"{{ticker}}","interval":"{{interval}}","close":"{{close}}","message":"HTF BIAS: BULLISH | Score: {{plot_0}}/9"}
+alertcondition(finalBias == "BULLISH" and trigActive,  "YEMRE HTF: Bullish Trigger", "BULLISH Trigger Aktif")
+alertcondition(finalBias == "BEARISH" and trigActive,  "YEMRE HTF: Bearish Trigger", "BEARISH Trigger Aktif")
+alertcondition(h4BosBull,                              "YEMRE HTF: 4H BOS BULL",     "4H Bullish BOS kırıldı")
+alertcondition(h4BosBear,                              "YEMRE HTF: 4H BOS BEAR",     "4H Bearish BOS kırıldı")
+alertcondition(h4ChochBull,                            "YEMRE HTF: 4H CHoCH BULL",   "4H Bullish CHoCH — yapı dönüşü")
+alertcondition(h4ChochBear,                            "YEMRE HTF: 4H CHoCH BEAR",   "4H Bearish CHoCH — yapı dönüşü")
+alertcondition(biasScore >= 7,                         "YEMRE HTF: Score 7+",        "Bias Score 7/9 veya üzeri")
+
+// ─── TABLO ──────────────────────────────────────────────────────
+if barstate.islast
+    tPos = switch i_tablePos
+        "top_left"     => position.top_left
+        "bottom_right" => position.bottom_right
+        "bottom_left"  => position.bottom_left
+        =>               position.top_right
+
+    t = table.new(tPos, 2, 14,
+         bgcolor     = color.new(#080810, 88),
+         border_width = 1,  border_color = C_BORDER,
+         frame_width  = 2,  frame_color  = C_FRAME)
+
+    // Header
+    table.cell(t, 0, 0, "YEMRE HTF BIAS",
+         bgcolor=C_HEAD, text_color=color.new(#ffffff,0),
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(t, 1, 0, syminfo.ticker,
+         bgcolor=C_HEAD, text_color=color.new(#aaaadd,0),
+         text_size=size.small, text_halign=text.align_center)
+
+    // Data rows: label | value
+    table.cell(t,0,1,"AMD",       bgcolor=rowBg(1),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,1,amdStr,      bgcolor=rowBg(1),text_color=amdCol, text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,2,"PD Zone",   bgcolor=rowBg(2),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,2,pdStr,       bgcolor=rowBg(2),text_color=pdCol,  text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,3,"OTE",       bgcolor=rowBg(3),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,3,oteStr,      bgcolor=rowBg(3),text_color=oteCol, text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,4,"BTC Corr",  bgcolor=rowBg(4),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,4,corrStr,     bgcolor=rowBg(4),text_color=corrCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,5,"USDT.D",    bgcolor=rowBg(5),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,5,usdtStr,     bgcolor=rowBg(5),text_color=usdtCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,6,"SMT",       bgcolor=rowBg(6),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,6,smtStr,      bgcolor=rowBg(6),text_color=smtCol, text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,7,"4H Struct",  bgcolor=rowBg(7),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,7,structStr,   bgcolor=rowBg(7),text_color=structCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,8,"VWAP",      bgcolor=rowBg(8),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,8,vwapStr,     bgcolor=rowBg(8),text_color=vwapCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,9,"Kill Zone", bgcolor=rowBg(9),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,9,kzStr,       bgcolor=rowBg(9),text_color=kzCol,  text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,10,"Bias Score",bgcolor=rowBg(10),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,10,scoreStr,    bgcolor=rowBg(10),text_color=scoreCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,11,"Trigger",  bgcolor=rowBg(11),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,11,trigStr,    bgcolor=rowBg(11),text_color=trigCol,text_size=size.small,text_halign=text.align_right)
+
+    // Bias - büyük sonuç satırı
+    table.cell(t,0,12,"Bias",     bgcolor=color.new(finalCol,80),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,12,finalBias,  bgcolor=color.new(finalCol,80),text_color=finalCol,text_size=size.normal,text_halign=text.align_right)
+
+    table.cell(t,0,13,"KZ",       bgcolor=rowBg(13),text_color=color.new(C_NEUT,0),text_size=size.tiny)
+    table.cell(t,1,13,kzStr,      bgcolor=rowBg(13),text_color=kzCol,text_size=size.tiny,text_halign=text.align_right)
+
+// ─── ARKA PLAN ──────────────────────────────────────────────────
+bgClr = i_showBg and finalBias=="BULLISH" ? color.new(color.green,96) : i_showBg and finalBias=="BEARISH" ? color.new(color.red,96) : na
+bgcolor(bgClr)
+
+// ─── 4H SWING SEVİYELERİ (opsiyonel referans çizgileri) ─────────
+plot(h4LastPH, "4H Swing High", color=color.new(C_BEAR, 60), linewidth=1, style=plot.style_stepline)
+plot(h4LastPL, "4H Swing Low",  color=color.new(C_BULL, 60), linewidth=1, style=plot.style_stepline)
+
+// ─── PLOT (Alert için) ──────────────────────────────────────────
+plot(biasScore, "HTF Bias Score", display=display.none)
+plot(finalBias=="BULLISH" ? 1 : finalBias=="BEARISH" ? -1 : 0, "Bias Direction", display=display.none)

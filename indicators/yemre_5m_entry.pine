@@ -1,0 +1,396 @@
+// ╔══════════════════════════════════════════════════════════════╗
+// ║   YEMRE 5M ENTRY v1.2                                        ║
+// ║   LTF Giriş Sinyal Göstergesi (5M / 3M / 1M)                ║
+// ║   Strateji: FVG, OB, MSB, CISD, Sweep, Gate                 ║
+// ║                                                              ║
+// ║   KULLANIM:                                                  ║
+// ║   - HTF Bias BULLISH ise sadece BULL GATE'e bak              ║
+// ║   - HTF Bias BEARISH ise sadece BEAR GATE'e bak              ║
+// ║   - GATE ✓ = tüm şartlar tamam, giriş hazır                 ║
+// ║   - GATE ✗ = bekle, setup tamamlanmadı                      ║
+// ║                                                              ║
+// ║   WEBHOOK MESSAGE FORMAT:                                    ║
+// ║   {"symbol":"{{ticker}}","interval":"{{interval}}",          ║
+// ║    "close":"{{close}}","sl":"{{plot_2}}","tp":"{{plot_3}}",  ║
+// ║    "message":"BULL GATE | {{plot_0}}/10 | SL:{{plot_2}} TP:{{plot_3}}"} ║
+// ╚══════════════════════════════════════════════════════════════╝
+//@version=5
+indicator("YEMRE 5M ENTRY", overlay=true, max_boxes_count=100, max_lines_count=50, max_labels_count=50)
+
+// ─── AYARLAR ────────────────────────────────────────────────────
+var string G1 = "Semboller"
+var string G2 = "Kill Zone (UTC)"
+var string G3 = "Setup Eşikleri"
+var string G4 = "Görünüm"
+
+i_htfTF      = input.timeframe("240",  "HTF Timeframe (Bias)",      group=G1)
+i_btcSymbol  = input.symbol("BINANCE:BTCUSDT", "BTC Sembolü",       group=G1)
+i_corrSymbol = input.symbol("BINANCE:ETHUSDT", "Korelasyon Sembolü (ETH/NQ/ES)", group=G1)
+
+i_fvgMinPct  = input.float(0.08, "Min FVG Büyüklüğü (%)",           group=G3, minval=0.01, step=0.01)
+i_minScore   = input.int(6,      "Gate İçin Min Skor",               group=G3, minval=1, maxval=10)
+i_swingLen   = input.int(10,     "MSB Swing Uzunluğu",               group=G3, minval=5,  maxval=30)
+i_obAtrMult  = input.float(1.5,  "OB Min Büyüklüğü (ATR x)",        group=G3, minval=0.5, step=0.1)
+i_sweepLen   = input.int(10,     "Sweep Lookback (bar)",             group=G3, minval=5,  maxval=30)
+i_sweepAtr   = input.float(0.3,  "Sweep Min Büyüklüğü (ATR x)",     group=G3, minval=0.1, step=0.1)
+i_pivLen     = input.int(5,      "4H Pivot Bar Sayısı",              group=G3, minval=2, maxval=10)
+i_cooldown   = input.int(20,     "Sinyal Cooldown (bar)",            group=G3, minval=5, maxval=200)
+i_rrMult     = input.float(2.0,  "TP R/R Çarpanı",                  group=G3, minval=1.0, maxval=5.0, step=0.5)
+i_showSweep  = input.bool(false, "Sweep Noktalarını Grafike Çiz",    group=G4)
+i_showLabel  = input.bool(true,  "Sinyal Etiketi (Entry/SL/TP)",     group=G4)
+
+i_kzLondonS  = input.int(7,  "London KZ Başlangıç (UTC)", 0, 23,   group=G2)
+i_kzLondonE  = input.int(10, "London KZ Bitiş (UTC)",     0, 23,   group=G2)
+i_kzNYS      = input.int(13, "NY KZ Başlangıç (UTC)",     0, 23,   group=G2)
+i_kzNYE      = input.int(16, "NY KZ Bitiş (UTC)",         0, 23,   group=G2)
+
+i_tablePos   = input.string("top_right", "Tablo Konumu",
+                 options=["top_right","top_left","bottom_right","bottom_left"], group=G4)
+i_showFVG    = input.bool(true, "FVG Kutularını Göster",             group=G4)
+i_showOB     = input.bool(true, "OB Kutularını Göster",              group=G4)
+
+// ─── RENKLER ────────────────────────────────────────────────────
+C_BULL   = #00c853
+C_BEAR   = #ff1744
+C_WARN   = #ff9100
+C_NEUT   = #9e9e9e
+C_TEXT   = color.new(#e0e0e0, 0)
+C_HEAD   = color.new(#001a10, 0)
+C_ROW_A  = color.new(#080810, 88)
+C_ROW_B  = color.new(#0d0d18, 88)
+C_FRAME  = color.new(#00cc66, 0)
+C_BORDER = color.new(#1a3320, 0)
+
+rowBg(r) =>
+    r % 2 == 0 ? C_ROW_A : C_ROW_B
+
+// ─── 4H YAPI FONKSİYONU (pivot tabanlı BOS / CHoCH) ─────────────
+f_htfStruct() =>
+    ph = ta.pivothigh(high, i_pivLen, i_pivLen)
+    pl = ta.pivotlow(low,  i_pivLen, i_pivLen)
+    var float lastPH  = na
+    var float lastPL  = na
+    var float prev2PH = na
+    var float prev2PL = na
+    var int   sDir    = 0
+    if not na(ph)
+        prev2PH := lastPH
+        lastPH  := ph
+    if not na(pl)
+        prev2PL := lastPL
+        lastPL  := pl
+    if not na(prev2PH) and not na(prev2PL)
+        if lastPH > prev2PH and lastPL > prev2PL
+            sDir := 1
+        else if lastPH < prev2PH and lastPL < prev2PL
+            sDir := -1
+    rawBull   = not na(lastPH) and close > lastPH
+    rawBear   = not na(lastPL) and close < lastPL
+    bosBull   = sDir ==  1 and rawBull
+    bosBear   = sDir == -1 and rawBear
+    chochBull = sDir == -1 and rawBull
+    chochBear = sDir ==  1 and rawBear
+    [bosBull, bosBear, chochBull, chochBear, sDir]
+
+// ─── HTF DATA (4H bias) ─────────────────────────────────────────
+[h4BosBull, h4BosBear, h4ChochBull, h4ChochBear, h4SDir] = request.security(syminfo.tickerid, i_htfTF, f_htfStruct())
+
+// USDT.D (skor bonusu olarak kalıyor, zorunlu koşul değil)
+usdtC       = request.security("CRYPTOCAP:USDT.D", timeframe.period, close)
+usdtC5      = request.security("CRYPTOCAP:USDT.D", timeframe.period, close[5])
+usdtFalling = usdtC < usdtC5
+
+// HTF Align: yapı yönü (h4SDir) veya CHoCH sinyali
+htfBull     = h4SDir == 1 or h4ChochBull
+htfBear     = h4SDir == -1 or h4ChochBear
+htfAlignStr = h4BosBull ? "BOS ↑" : h4ChochBull ? "CHoCH ↑" : h4SDir == 1 ? "BULL ↑" : h4BosBear ? "BOS ↓" : h4ChochBear ? "CHoCH ↓" : h4SDir == -1 ? "BEAR ↓" : "—"
+htfAlignCol = htfBull and not htfBear ? color.new(C_BULL,0) : htfBear and not htfBull ? color.new(C_BEAR,0) : color.new(C_WARN,0)
+
+// ─── FVG: Fair Value Gap (3-mum imbalance) ──────────────────────
+fvgMin    = close * i_fvgMinPct / 100
+bullFVG   = low[0] > high[2] and (low[0] - high[2]) >= fvgMin  // bullish FVG
+bearFVG   = high[0] < low[2] and (low[2] - high[0]) >= fvgMin  // bearish FVG
+
+// Yakın geçmişte FVG var mı? (son 10 bar içinde)
+recentBullFVG = bullFVG or bullFVG[1] or bullFVG[2] or bullFVG[3] or bullFVG[4]
+recentBearFVG = bearFVG or bearFVG[1] or bearFVG[2] or bearFVG[3] or bearFVG[4]
+
+// IFVG CE (Inverse FVG – price returned to fill it)
+// Bearish FVG sonrasında fiyat geri döndüyse = Bullish IFVG CE
+ifvgBullCE = recentBearFVG and close > low[2]  // bearish FVG'yi yukarıdan kapattı
+ifvgBearCE = recentBullFVG and close < high[2]  // bullish FVG'yi aşağıdan kapattı
+
+fvgStr    = recentBullFVG ? "BULL FVG" : recentBearFVG ? "BEAR FVG" : "—"
+fvgCol    = recentBullFVG ? color.new(C_BULL,0) : recentBearFVG ? color.new(C_BEAR,0) : color.new(C_NEUT,0)
+ifvgStr   = ifvgBullCE ? "BULL CE ✓" : ifvgBearCE ? "BEAR CE ✓" : "—"
+ifvgCol   = ifvgBullCE ? color.new(C_BULL,0) : ifvgBearCE ? color.new(C_BEAR,0) : color.new(C_NEUT,0)
+
+// ─── FVG Kutuları ───────────────────────────────────────────────
+if i_showFVG and bullFVG
+    box.new(bar_index - 2, low[0], bar_index + 3, high[2],
+         bgcolor=color.new(C_BULL, 88), border_color=color.new(C_BULL, 50), border_width=1)
+
+if i_showFVG and bearFVG
+    box.new(bar_index - 2, high[0], bar_index + 3, low[2],
+         bgcolor=color.new(C_BEAR, 88), border_color=color.new(C_BEAR, 50), border_width=1)
+
+// ─── ORDER BLOCK (ATR filtreli + mitigate takibi) ────────────────
+atr14     = ta.atr(14)
+// Bullish OB: impulsif çıkış öncesi son bearish mum (yeterince büyük)
+bullOB = close[2] < open[2] and close[1] > open[1] and (close[1] - open[1]) > atr14 * i_obAtrMult
+
+// Bearish OB: impulsif düşüş öncesi son bullish mum
+bearOB = close[2] > open[2] and close[1] < open[1] and (open[1] - close[1]) > atr14 * i_obAtrMult
+
+// En son aktif OB seviyelerini takip et
+var float lastBullOBTop = na
+var float lastBullOBBot = na
+var float lastBearOBTop = na
+var float lastBearOBBot = na
+
+if bullOB
+    lastBullOBTop := math.max(open[2], close[2])
+    lastBullOBBot := math.min(open[2], close[2])
+
+if bearOB
+    lastBearOBTop := math.max(open[2], close[2])
+    lastBearOBBot := math.min(open[2], close[2])
+
+// Mitigate: fiyat OB'nin içine girdi mi?
+bullOBMit = not na(lastBullOBBot) and close < lastBullOBBot
+bearOBMit = not na(lastBearOBTop) and close > lastBearOBTop
+if bullOBMit
+    lastBullOBTop := na
+    lastBullOBBot := na
+if bearOBMit
+    lastBearOBTop := na
+    lastBearOBBot := na
+
+activeBullOB = not na(lastBullOBTop)
+activeBearOB = not na(lastBearOBTop)
+
+obStr  = activeBullOB ? "OB OK ✓" : activeBearOB ? "BEAR OB ✓" : "—"
+obCol  = activeBullOB ? color.new(C_BULL,0) : activeBearOB ? color.new(C_BEAR,0) : color.new(C_NEUT,0)
+
+// OB kutusunu sadece oluştuğu anda çiz (en son OB)
+if i_showOB and bullOB
+    box.new(bar_index - 2, lastBullOBBot, bar_index + 8, lastBullOBTop,
+         bgcolor=color.new(C_BULL, 86), border_color=color.new(C_BULL, 50), border_width=1)
+
+if i_showOB and bearOB
+    box.new(bar_index - 2, lastBearOBBot, bar_index + 8, lastBearOBTop,
+         bgcolor=color.new(C_BEAR, 86), border_color=color.new(C_BEAR, 50), border_width=1)
+
+// ─── FVG/OB Kombine ─────────────────────────────────────────────
+fvgObStr  = (recentBullFVG or activeBullOB) ? "OB/FVG ✓" : (recentBearFVG or activeBearOB) ? "BEAR ✓" : "—"
+fvgObCol  = (recentBullFVG or activeBullOB) ? color.new(C_BULL,0) : (recentBearFVG or activeBearOB) ? color.new(C_BEAR,0) : color.new(C_NEUT,0)
+
+// ─── KILL ZONE ──────────────────────────────────────────────────
+h_utc     = hour(time, "UTC")
+inLondon  = h_utc >= i_kzLondonS and h_utc < i_kzLondonE
+inNY      = h_utc >= i_kzNYS     and h_utc < i_kzNYE
+inKZ      = inLondon or inNY
+kzStr     = inLondon ? "LONDON KZ" : inNY ? "NY KZ" : "OFF_KZ"
+kzCol     = inKZ ? color.new(C_BULL,0) : color.new(C_NEUT,0)
+
+// ─── MSB / CISD: Market Structure Break / Change in State ────────
+swHigh    = ta.highest(high[1], i_swingLen)
+swLow     = ta.lowest(low[1],   i_swingLen)
+msbBull   = close > swHigh  // Bullish MSB: son swing high kırıldı
+msbBear   = close < swLow   // Bearish MSB: son swing low kırıldı
+
+// CISD: son 5 mumun yönü değişti mi?
+bearDelivery = close[1] < open[1] and close[2] < open[2] and close[3] < open[3]
+bullDelivery = close[1] > open[1] and close[2] > open[2] and close[3] > open[3]
+cisdBull  = bearDelivery and close > open  // Bear delivery → Bull mum = CISD
+cisdBear  = bullDelivery and close < open  // Bull delivery → Bear mum = CISD
+
+cisd = cisdBull or msbBull ? "BULL OK" : cisdBear or msbBear ? "BEAR OK" : "—"
+cisdCol = (cisdBull or msbBull) ? color.new(C_BULL,0) : (cisdBear or msbBear) ? color.new(C_BEAR,0) : color.new(C_NEUT,0)
+
+// ─── LIQUIDITY SWEEP (ATR filtreli, daha uzun lookback) ──────────
+prevHighSw  = ta.highest(high[1], i_sweepLen)
+prevLowSw   = ta.lowest(low[1],   i_sweepLen)
+minSweepSz  = atr14 * i_sweepAtr
+
+// Sweep: fiyat önemli bir swing'i geçti ama kapanış geri döndü
+sweepHigh   = high > prevHighSw and close < prevHighSw and (high - prevHighSw) >= minSweepSz
+sweepLow    = low  < prevLowSw  and close > prevLowSw  and (prevLowSw - low)  >= minSweepSz
+
+sweepStr   = sweepLow ? "BULL SWEEP ✓" : sweepHigh ? "BEAR SWEEP ✓" : "—"
+sweepCol   = sweepLow ? color.new(C_BULL,0) : sweepHigh ? color.new(C_BEAR,0) : color.new(C_NEUT,0)
+
+// ─── DOL: Dealing Range / Dollar ─────────────────────────────────
+dHigh      = request.security(syminfo.tickerid, "D", high,  lookahead=barmerge.lookahead_on)
+dLow       = request.security(syminfo.tickerid, "D", low,   lookahead=barmerge.lookahead_on)
+dRange     = dHigh - dLow
+dPos       = dRange > 0 ? (close - dLow) / dRange * 100 : 50
+dolStr     = dPos > 80 ? "AT HIGH DOL" : dPos < 20 ? "AT LOW DOL" : "MID RANGE"
+dolCol     = dPos > 80 ? color.new(C_BEAR,0) : dPos < 20 ? color.new(C_BULL,0) : color.new(C_WARN,0)
+
+// ─── KORELASYON (BTC/ETH veya NQ/ES) ────────────────────────────
+corrClose  = request.security(i_corrSymbol, timeframe.period, close)
+corrClose5 = request.security(i_corrSymbol, timeframe.period, close[5])
+corrTicker = syminfo.ticker(i_corrSymbol)
+corrBull   = corrClose > corrClose5
+myBull     = close > close[5]
+corrAlignStr = corrBull == myBull ? (corrBull ? "↑ ALIGNED" : "↓ ALIGNED") : "DIVERGED"
+corrAlignCol = corrBull == myBull ? (corrBull ? color.new(C_BULL,0) : color.new(C_BEAR,0)) : color.new(C_WARN,0)
+corrRow    = str.tostring(math.round(corrClose, 0)) + " | " + str.tostring(math.round(close, 2))
+
+// ─── SKOR (0–10) ─────────────────────────────────────────────────
+// 4H yapı kalitesi: BOS=2pt, CHoCH=1pt, genel yön=1pt
+entryScore = 0
+entryScore += h4BosBull ? 2 : h4ChochBull ? 1 : (h4SDir == 1 ? 1 : 0)
+entryScore += (recentBullFVG or activeBullOB) ? 1 : 0
+entryScore += msbBull                         ? 1 : 0
+entryScore += cisdBull                        ? 1 : 0
+entryScore += sweepLow                        ? 1 : 0
+entryScore += inKZ                            ? 1 : 0   // bonus (zorunlu değil)
+entryScore += dPos < 50                       ? 1 : 0
+entryScore += usdtFalling                     ? 1 : 0   // bonus (zorunlu değil)
+entryScore += ifvgBullCE                      ? 1 : 0
+
+bearScore = 0
+bearScore += h4BosBear ? 2 : h4ChochBear ? 1 : (h4SDir == -1 ? 1 : 0)
+bearScore += (recentBearFVG or activeBearOB)  ? 1 : 0
+bearScore += msbBear                          ? 1 : 0
+bearScore += cisdBear                         ? 1 : 0
+bearScore += sweepHigh                        ? 1 : 0
+bearScore += inKZ                             ? 1 : 0
+bearScore += dPos > 50                        ? 1 : 0
+bearScore += not usdtFalling                  ? 1 : 0
+bearScore += ifvgBearCE                       ? 1 : 0
+
+finalScore    = htfBull ? entryScore : htfBear ? bearScore : math.max(entryScore, bearScore)
+scoreStr      = str.tostring(finalScore) + "/10"
+scoreCol      = finalScore >= 7 ? color.new(C_BULL,0) : finalScore <= 3 ? color.new(C_BEAR,0) : color.new(C_WARN,0)
+
+// ─── GATE ────────────────────────────────────────────────────────
+// Tüm kritik şartlar sağlandıysa GATE ✓
+// KZ artık gate'te zorunlu değil — sadece skor bonusu
+gateBull = htfBull and msbBull and finalScore >= i_minScore
+gateBear = htfBear and msbBear and finalScore >= i_minScore
+gateOpen = gateBull or gateBear
+
+gateStr  = gateBull ? "BULL GATE ✓" : gateBear ? "BEAR GATE ✓" : "GATE ✗"
+gateCol  = gateBull ? color.new(C_BULL,0) : gateBear ? color.new(C_BEAR,0) : color.new(C_BEAR,20)
+
+// ─── SL / TP HESAPLAMA ──────────────────────────────────────────
+// Bull SL: aktif OB altı (varsa) ya da son 5 bar en düşük — ATR buffer ile
+slBull = not na(lastBullOBBot) ? lastBullOBBot - atr14 * 0.2 : ta.lowest(low[1], 5) - atr14 * 0.2
+slBear = not na(lastBearOBTop) ? lastBearOBTop + atr14 * 0.2 : ta.highest(high[1], 5) + atr14 * 0.2
+tpBull = close + (close - slBull) * i_rrMult
+tpBear = close - (slBear - close) * i_rrMult
+
+// ─── NEDEN SİNYALİ? ─────────────────────────────────────────────
+reasonBull = (recentBullFVG ? "FVG " : "") + (activeBullOB ? "OB " : "") + (msbBull ? "MSB " : "") + (cisdBull ? "CISD " : "") + (sweepLow ? "SWEEP " : "") + (ifvgBullCE ? "IFVG " : "") + (inKZ ? kzStr : "")
+reasonBear = (recentBearFVG ? "FVG " : "") + (activeBearOB ? "OB " : "") + (msbBear ? "MSB " : "") + (cisdBear ? "CISD " : "") + (sweepHigh ? "SWEEP " : "") + (ifvgBearCE ? "IFVG " : "") + (inKZ ? kzStr : "")
+
+// ─── GATE ETİKETİ + SL/TP ÇİZGİLERİ ────────────────────────────
+// Cooldown: aynı yönde arka arkaya sinyal vermesini önler
+var int lastBullBar = 0
+var int lastBearBar = 0
+newGateBull = gateBull and not gateBull[1] and (bar_index - lastBullBar) >= i_cooldown
+newGateBear = gateBear and not gateBear[1] and (bar_index - lastBearBar) >= i_cooldown
+if newGateBull
+    lastBullBar := bar_index
+if newGateBear
+    lastBearBar := bar_index
+
+if newGateBull and i_showLabel
+    _txtB = "BULL GATE ✓  " + scoreStr + "\n" + reasonBull + "\nEntry : " + str.tostring(close, format.mintick) + "\nSL    : " + str.tostring(slBull, format.mintick) + "\nTP    : " + str.tostring(tpBull, format.mintick) + "  (1:" + str.tostring(i_rrMult, "#.#") + ")"
+    label.new(bar_index, low - atr14, _txtB, color=color.new(C_BULL, 5), textcolor=color.white, style=label.style_label_up, size=size.normal)
+    line.new(bar_index, slBull, bar_index + 40, slBull, color=color.new(C_BEAR, 0), width=1, style=line.style_dashed)
+    line.new(bar_index, tpBull, bar_index + 40, tpBull, color=color.new(C_BULL, 0), width=1, style=line.style_dashed)
+
+if newGateBear and i_showLabel
+    _txtBr = "BEAR GATE ✓  " + scoreStr + "\n" + reasonBear + "\nEntry : " + str.tostring(close, format.mintick) + "\nSL    : " + str.tostring(slBear, format.mintick) + "\nTP    : " + str.tostring(tpBear, format.mintick) + "  (1:" + str.tostring(i_rrMult, "#.#") + ")"
+    label.new(bar_index, high + atr14, _txtBr, color=color.new(C_BEAR, 5), textcolor=color.white, style=label.style_label_down, size=size.normal)
+    line.new(bar_index, slBear, bar_index + 40, slBear, color=color.new(C_BULL, 0), width=1, style=line.style_dashed)
+    line.new(bar_index, tpBear, bar_index + 40, tpBear, color=color.new(C_BEAR, 0), width=1, style=line.style_dashed)
+
+// ─── ALERT CONDITIONS ────────────────────────────────────────────
+alertcondition(newGateBull, "YEMRE 5M: BULL GATE ✓",    "Bull Gate - Yeni Sinyal")
+alertcondition(newGateBear, "YEMRE 5M: BEAR GATE ✓",    "Bear Gate - Yeni Sinyal")
+alertcondition(msbBull,  "YEMRE 5M: MSB Bullish",    "5M Bullish MSB Kırıldı")
+alertcondition(msbBear,  "YEMRE 5M: MSB Bearish",    "5M Bearish MSB Kırıldı")
+alertcondition(sweepLow, "YEMRE 5M: Bullish Sweep",  "Aşağı Likidite Süpürmesi Yapıldı")
+alertcondition(sweepHigh,"YEMRE 5M: Bearish Sweep",  "Yukarı Likidite Süpürmesi Yapıldı")
+alertcondition(bullFVG,  "YEMRE 5M: Bullish FVG",    "Bullish Fair Value Gap Oluştu")
+alertcondition(bearFVG,  "YEMRE 5M: Bearish FVG",    "Bearish Fair Value Gap Oluştu")
+
+// ─── TABLO ──────────────────────────────────────────────────────
+if barstate.islast
+    tPos = switch i_tablePos
+        "top_left"     => position.top_left
+        "bottom_right" => position.bottom_right
+        "bottom_left"  => position.bottom_left
+        =>               position.top_right
+
+    t = table.new(tPos, 2, 13,
+         bgcolor      = color.new(#080810, 88),
+         border_width = 1,  border_color = C_BORDER,
+         frame_width  = 2,  frame_color  = C_FRAME)
+
+    // Header
+    table.cell(t,0,0,"YEMRE 5M ENTRY",
+         bgcolor=C_HEAD, text_color=color.new(#ffffff,0),
+         text_size=size.small, text_halign=text.align_center)
+    table.cell(t,1,0,syminfo.ticker + " " + timeframe.period,
+         bgcolor=C_HEAD, text_color=color.new(#aaddaa,0),
+         text_size=size.small, text_halign=text.align_center)
+
+    table.cell(t,0,1,"FVG / OB",   bgcolor=rowBg(1),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,1,fvgObStr,     bgcolor=rowBg(1),text_color=fvgObCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,2,"IFVG CE",    bgcolor=rowBg(2),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,2,ifvgStr,      bgcolor=rowBg(2),text_color=ifvgCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,3,"4H Align",   bgcolor=rowBg(3),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,3,htfAlignStr,  bgcolor=rowBg(3),text_color=htfAlignCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,4,"KZ",         bgcolor=rowBg(4),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,4,kzStr,        bgcolor=rowBg(4),text_color=kzCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,5,"CISD / MSB", bgcolor=rowBg(5),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,5,cisd,         bgcolor=rowBg(5),text_color=cisdCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,6,"Sweep",      bgcolor=rowBg(6),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,6,sweepStr,     bgcolor=rowBg(6),text_color=sweepCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,7,"DOL",        bgcolor=rowBg(7),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,7,dolStr,       bgcolor=rowBg(7),text_color=dolCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,8,corrTicker,   bgcolor=rowBg(8),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,8,corrAlignStr, bgcolor=rowBg(8),text_color=corrAlignCol,text_size=size.small,text_halign=text.align_right)
+
+    table.cell(t,0,9,"Score",      bgcolor=rowBg(9),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,9,scoreStr,     bgcolor=rowBg(9),text_color=scoreCol,text_size=size.small,text_halign=text.align_right)
+
+    // Gate — en büyük satır
+    table.cell(t,0,10,"",          bgcolor=color.new(gateCol,85),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,10,"",          bgcolor=color.new(gateCol,85),text_color=gateCol,text_size=size.small)
+
+    table.cell(t,0,11,"Gate",      bgcolor=color.new(gateCol,75),text_color=C_TEXT,text_size=size.small)
+    table.cell(t,1,11,gateStr,     bgcolor=color.new(gateCol,75),text_color=gateCol,text_size=size.large,text_halign=text.align_right)
+
+    // Alt bilgi
+    table.cell(t,0,12,"HTF",       bgcolor=rowBg(12),text_color=color.new(C_NEUT,0),text_size=size.tiny)
+    table.cell(t,1,12,i_htfTF+"  "+htfAlignStr, bgcolor=rowBg(12),text_color=htfAlignCol,text_size=size.tiny,text_halign=text.align_right)
+
+// ─── GATE SİNYAL OKLAR ──────────────────────────────────────────
+// Gate okları — sadece Gate açıldığında
+plotshape(gateBull, "Bull Gate ✓", shape.triangleup,   location.belowbar, color.new(C_BULL,0), size=size.large)
+plotshape(gateBear, "Bear Gate ✓", shape.triangledown, location.abovebar, color.new(C_BEAR,0), size=size.large)
+
+// Sweep işaretleri — isteğe bağlı (default: kapalı)
+plotshape(i_showSweep and sweepLow,  "Bull Sweep", shape.diamond, location.belowbar, color.new(C_BULL,20), size=size.small)
+plotshape(i_showSweep and sweepHigh, "Bear Sweep", shape.diamond, location.abovebar, color.new(C_BEAR,20), size=size.small)
+
+// ─── PLOT (Alertler için) ────────────────────────────────────────
+// plot_0 = skor, plot_1 = gate, plot_2 = SL, plot_3 = TP
+plot(finalScore,                              "Entry Score",  display=display.none)
+plot(gateOpen ? 1 : 0,                        "Gate Status",  display=display.none)
+plot(gateBull ? slBull : gateBear ? slBear : na, "SL Level", display=display.none)
+plot(gateBull ? tpBull : gateBear ? tpBear : na, "TP Level", display=display.none)
