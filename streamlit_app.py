@@ -21,28 +21,187 @@ st.set_page_config(
 # ─── Stil ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    .bias-bullish  { color: #00c853; font-size: 1.5rem; font-weight: bold; }
-    .bias-bearish  { color: #ff1744; font-size: 1.5rem; font-weight: bold; }
-    .bias-ranging  { color: #ff9100; font-size: 1.5rem; font-weight: bold; }
-    .bias-notrade  { color: #9e9e9e; font-size: 1.5rem; font-weight: bold; }
-    .confidence-bar { margin-top: 4px; }
-    .section-header { font-size: 1.1rem; font-weight: 600; margin-top: 1rem; }
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
-    .gate-card {
-        border-radius: 12px;
-        padding: 16px 20px;
-        margin-bottom: 12px;
-        border-left: 5px solid;
-    }
-    .gate-bull { background: rgba(0,200,83,0.08); border-color: #00c853; }
-    .gate-bear { background: rgba(255,23,68,0.08);  border-color: #ff1744; }
-    .gate-htf  { background: rgba(100,181,246,0.08); border-color: #64b5f6; }
-    .gate-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 6px; }
-    .gate-row   { font-size: 0.92rem; font-family: monospace; margin: 2px 0; }
-    .gate-time  { font-size: 0.78rem; color: #888; margin-top: 8px; }
-    .stat-box   { text-align: center; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.04); }
-    .stat-num   { font-size: 1.6rem; font-weight: 700; }
-    .stat-lbl   { font-size: 0.78rem; color: #888; }
+/* ── Base ── */
+html, body, [data-testid="stAppViewContainer"] {
+    background: #070a0f !important;
+    font-family: 'Inter', sans-serif;
+}
+[data-testid="stSidebar"] {
+    background: #090c13 !important;
+    border-right: 1px solid rgba(255,255,255,0.05) !important;
+}
+[data-testid="stSidebar"] * { color: #8a9bb0 !important; }
+[data-testid="stSidebar"] .stRadio label { color: #c0cad6 !important; }
+[data-testid="block-container"] { padding-top: 1.2rem !important; }
+h1,h2,h3,h4,h5 { color: #e0e6ed !important; }
+.stButton>button {
+    background: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: #c0cad6 !important; border-radius: 8px !important;
+    font-family: 'Inter', sans-serif !important;
+}
+.stButton>button:hover {
+    background: rgba(255,255,255,0.09) !important;
+    border-color: rgba(255,255,255,0.2) !important;
+}
+
+/* ── Topbar ── */
+.yai-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px; padding: 12px 22px; margin-bottom: 18px;
+}
+.yai-topbar-title {
+    font-size: 1rem; font-weight: 700; letter-spacing: 0.18em;
+    color: #e0e6ed; text-transform: uppercase;
+    background: linear-gradient(90deg,#e0e6ed,#7f8c9a);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.yai-status-group { display: flex; gap: 18px; align-items: center; }
+.yai-status-item  { display: flex; align-items: center; gap: 6px;
+    font-size: 0.73rem; color: #7f8c9a; font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase; letter-spacing: 0.06em; }
+.dot-on  { width:7px;height:7px;border-radius:50%;background:#00ff88;box-shadow:0 0 8px #00ff88;display:inline-block; }
+.dot-off { width:7px;height:7px;border-radius:50%;background:#ff3366;box-shadow:0 0 8px #ff3366;display:inline-block; }
+.dot-warn{ width:7px;height:7px;border-radius:50%;background:#ffd32a;box-shadow:0 0 6px #ffd32a;display:inline-block; }
+.yai-btc-block { display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace; }
+.yai-btc-lbl { font-size:0.7rem;color:#5a6878;text-transform:uppercase;letter-spacing:0.1em; }
+.yai-btc-price { font-size:1.15rem;font-weight:700;color:#e0e6ed; }
+.yai-btc-up   { font-size:0.8rem;color:#00ff88;font-weight:600; }
+.yai-btc-down { font-size:0.8rem;color:#ff3366;font-weight:600; }
+
+/* ── HTF Bias ── */
+.htf-grid { display:flex;gap:10px;margin-bottom:16px; }
+.htf-card {
+    flex:1; padding:14px 18px; border-radius:12px;
+    border:1px solid; position:relative; overflow:hidden;
+}
+.htf-bull { border-color:rgba(0,255,136,0.25);background:rgba(0,255,136,0.04);box-shadow:0 0 24px rgba(0,255,136,0.06); }
+.htf-bear { border-color:rgba(255,51,102,0.25);background:rgba(255,51,102,0.04);box-shadow:0 0 24px rgba(255,51,102,0.06); }
+.htf-ranging { border-color:rgba(255,211,42,0.25);background:rgba(255,211,42,0.04);box-shadow:0 0 24px rgba(255,211,42,0.06); }
+.htf-sym  { font-size:0.68rem;color:#5a6878;letter-spacing:0.1em;text-transform:uppercase;font-family:'JetBrains Mono',monospace; }
+.htf-val  { font-size:1.05rem;font-weight:700;letter-spacing:0.04em;margin:5px 0 3px; }
+.htf-bull .htf-val  { color:#00ff88; }
+.htf-bear .htf-val  { color:#ff3366; }
+.htf-ranging .htf-val { color:#ffd32a; }
+.htf-meta { font-size:0.68rem;color:#3d4a58;font-family:'JetBrains Mono',monospace; }
+
+/* ── Stats Row ── */
+.stats-row { display:flex;gap:10px;margin-bottom:18px; }
+.stat-card {
+    flex:1; background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.07);
+    border-radius:12px; padding:16px 14px; text-align:center;
+}
+.stat-num { font-size:2rem;font-weight:700;font-family:'JetBrains Mono',monospace;line-height:1; }
+.sn-green { color:#00ff88; text-shadow:0 0 20px rgba(0,255,136,0.4); }
+.sn-red   { color:#ff3366; text-shadow:0 0 20px rgba(255,51,102,0.4); }
+.sn-blue  { color:#4fc3f7; }
+.sn-white { color:#e0e6ed; }
+.sn-pos   { color:#00ff88; }
+.sn-neg   { color:#ff3366; }
+.stat-lbl { font-size:0.64rem;color:#3d4a58;text-transform:uppercase;letter-spacing:0.12em;margin-top:5px; }
+
+/* ── Gate Signal ── */
+.gate-main { border-radius:14px;overflow:hidden;margin-bottom:12px; }
+.gate-main-hdr {
+    padding:13px 20px; font-size:0.82rem; font-weight:700;
+    letter-spacing:0.06em; display:flex; justify-content:space-between; align-items:center;
+}
+.gate-bull-hdr {
+    background:linear-gradient(135deg,rgba(0,255,136,0.13),rgba(0,255,136,0.04));
+    border-left:3px solid #00ff88; color:#00ff88;
+}
+.gate-bear-hdr {
+    background:linear-gradient(135deg,rgba(255,51,102,0.13),rgba(255,51,102,0.04));
+    border-left:3px solid #ff3366; color:#ff3366;
+}
+.gate-body {
+    padding:16px 20px; background:rgba(255,255,255,0.02);
+    border:1px solid rgba(255,255,255,0.06); border-top:none; border-radius:0 0 14px 14px;
+}
+.gate-item {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.04);
+    font-family:'JetBrains Mono',monospace;
+}
+.gate-item:last-child { border-bottom:none; }
+.gi-lbl { font-size:0.68rem;color:#3d4a58;text-transform:uppercase;letter-spacing:0.1em; }
+.gi-val { font-size:0.92rem;font-weight:600;color:#e0e6ed; }
+.gi-val.g { color:#00ff88; }
+.gi-val.r { color:#ff3366; }
+.gi-val.b { color:#4fc3f7;font-size:1.1rem;font-weight:700; }
+.gi-sub { font-size:0.72rem;color:#3d4a58;margin-left:8px; }
+.gate-score-bar { height:3px;background:rgba(255,255,255,0.08);border-radius:2px;margin-top:12px;overflow:hidden; }
+.gsb-fill-bull { height:100%;background:linear-gradient(90deg,#00c853,#00ff88);border-radius:2px; }
+.gsb-fill-bear { height:100%;background:linear-gradient(90deg,#ff1744,#ff3366);border-radius:2px; }
+.gate-ts { font-size:0.68rem;color:#3d4a58;margin-top:8px;font-family:'JetBrains Mono',monospace; }
+
+/* ── Signal Feed ── */
+.sf-wrap { background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:12px;overflow:hidden; }
+.sf-hdr { padding:9px 16px;font-size:0.64rem;text-transform:uppercase;letter-spacing:0.14em;color:#3d4a58;
+    border-bottom:1px solid rgba(255,255,255,0.05);background:rgba(255,255,255,0.02); }
+.sf-item { display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.8rem; }
+.sf-item:last-child { border-bottom:none; }
+.sf-ico { font-size:0.65rem;font-family:'JetBrains Mono',monospace;font-weight:700;padding:2px 5px;border-radius:4px; }
+.sf-ico-bull { color:#00ff88;background:rgba(0,255,136,0.1); }
+.sf-ico-bear { color:#ff3366;background:rgba(255,51,102,0.1); }
+.sf-ico-htf  { color:#4fc3f7;background:rgba(79,195,247,0.1); }
+.sf-ico-gen  { color:#7f8c9a;background:rgba(255,255,255,0.07); }
+.sf-pair { color:#c0cad6;font-weight:600; }
+.sf-tf   { color:#5a6878;font-size:0.72rem;margin-left:3px; }
+.sf-time { font-size:0.68rem;color:#3d4a58;margin-left:auto;font-family:'JetBrains Mono',monospace; }
+
+/* ── AI Card ── */
+.ai-card {
+    background:rgba(79,195,247,0.04);border:1px solid rgba(79,195,247,0.12);
+    border-radius:12px;padding:14px 18px;margin-top:10px;
+}
+.ai-top { display:flex;align-items:center;justify-content:space-between;margin-bottom:6px; }
+.ai-bias-lbl { font-size:1rem;font-weight:700;letter-spacing:0.04em; }
+.ai-bull { color:#00ff88; } .ai-bear { color:#ff3366; } .ai-ranging { color:#ffd32a; } .ai-neutral { color:#7f8c9a; }
+.ai-meta { font-size:0.68rem;color:#3d4a58;font-family:'JetBrains Mono',monospace; }
+.ai-summary { font-size:0.78rem;color:#7f8c9a;margin-top:8px;line-height:1.6;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px; }
+
+/* ── Trade Card ── */
+.trade-card {
+    background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);
+    border-radius:10px;padding:12px 16px;margin-bottom:8px;
+}
+.trade-hdr { display:flex;justify-content:space-between;margin-bottom:8px;font-size:0.82rem; }
+.trade-long  { color:#00ff88;font-weight:700;font-family:'JetBrains Mono',monospace; }
+.trade-short { color:#ff3366;font-weight:700;font-family:'JetBrains Mono',monospace; }
+.trade-sym { color:#e0e6ed;font-weight:600; }
+.trade-risk { font-size:0.72rem;color:#5a6878;font-family:'JetBrains Mono',monospace; }
+.trade-levels { display:flex;gap:18px;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#5a6878; }
+.tl-val { color:#c0cad6;margin-left:4px; }
+
+/* ── Section Label ── */
+.sec-lbl {
+    font-size:0.64rem;text-transform:uppercase;letter-spacing:0.16em;
+    color:#3d4a58;margin-bottom:10px;margin-top:4px;
+    display:flex;align-items:center;gap:8px;
+}
+.sec-lbl::after { content:'';flex:1;height:1px;background:rgba(255,255,255,0.05); }
+
+/* ── Misc ── */
+.bias-bullish { color:#00ff88;font-size:1.4rem;font-weight:700; }
+.bias-bearish { color:#ff3366;font-size:1.4rem;font-weight:700; }
+.bias-ranging { color:#ffd32a;font-size:1.4rem;font-weight:700; }
+.bias-notrade { color:#5a6878;font-size:1.4rem;font-weight:700; }
+.gate-card { border-radius:12px;padding:16px 20px;margin-bottom:12px;border-left:5px solid; }
+.gate-bull { background:rgba(0,255,136,0.06);border-color:#00ff88; }
+.gate-bear { background:rgba(255,51,102,0.06);border-color:#ff3366; }
+.gate-htf  { background:rgba(79,195,247,0.06);border-color:#4fc3f7; }
+.gate-title { font-size:1.1rem;font-weight:700;margin-bottom:6px; }
+.gate-row   { font-size:0.88rem;font-family:'JetBrains Mono',monospace;margin:3px 0; }
+.gate-time  { font-size:0.72rem;color:#3d4a58;margin-top:8px; }
+.stat-box   { text-align:center;padding:10px;border-radius:8px;background:rgba(255,255,255,0.03); }
+.stat-num   { font-size:1.6rem;font-weight:700; }
+.stat-lbl   { font-size:0.72rem;color:#5a6878; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -126,6 +285,7 @@ if page == "Dashboard":
     btc_price, btc_pct = _btc_price()
 
     today = datetime.now(timezone.utc).date().isoformat()
+    now_utc = datetime.now(timezone.utc).strftime("%H:%M UTC")
     today_alerts = [a for a in alerts if a.get("created_at", "").startswith(today)]
     bull_today   = sum(1 for a in today_alerts if "BULL GATE" in a.get("message","").upper())
     bear_today   = sum(1 for a in today_alerts if "BEAR GATE" in a.get("message","").upper())
@@ -134,213 +294,279 @@ if page == "Dashboard":
                          or "BEAR GATE" in a.get("message","").upper()), None)
     running_trades = [t for t in trades if t.get("result") == "RUNNING"]
 
-    # ── Başlık ───────────────────────────────────────────────────
-    h_col, ref_col = st.columns([5, 1])
-    with h_col:
-        st.title("Dashboard")
+    cf_url_file = Path(__file__).parent / ".cloudflare_url"
+    cf_url  = cf_url_file.read_text().strip() if cf_url_file.exists() else ""
+    api_ok  = bool(os.getenv("ANTHROPIC_API_KEY"))
+    tg_ok   = bool(os.getenv("TELEGRAM_BOT_TOKEN"))
+    wh_ok   = bool(cf_url)
+
+    # ── Top Bar ───────────────────────────────────────────────────
+    btc_block = ""
+    if btc_price:
+        sign = "+" if (btc_pct or 0) >= 0 else ""
+        chg_cls = "yai-btc-up" if (btc_pct or 0) >= 0 else "yai-btc-down"
+        btc_block = (
+            f"<div class='yai-btc-block'>"
+            f"<span class='yai-btc-lbl'>BTC</span>"
+            f"<span class='yai-btc-price'>${btc_price:,.0f}</span>"
+            f"<span class='{chg_cls}'>{sign}{btc_pct:.2f}%</span>"
+            f"</div>"
+        )
+    else:
+        btc_block = "<div class='yai-btc-block'><span class='yai-btc-lbl'>BTC</span><span class='yai-btc-price' style='color:#3d4a58'>—</span></div>"
+
+    st.markdown(f"""
+<div class="yai-topbar">
+  <div class="yai-status-group">
+    <div class="yai-status-item"><span class="{'dot-on' if api_ok else 'dot-off'}"></span> CLAUDE</div>
+    <div class="yai-status-item"><span class="{'dot-on' if tg_ok else 'dot-off'}"></span> TELEGRAM</div>
+    <div class="yai-status-item"><span class="{'dot-on' if wh_ok else 'dot-warn'}"></span> WEBHOOK</div>
+  </div>
+  <div class="yai-topbar-title">⬡ YEMRE AI TRADING DESK</div>
+  <div style="display:flex;align-items:center;gap:20px">
+    {btc_block}
+    <span style="font-size:0.72rem;color:#3d4a58;font-family:'JetBrains Mono',monospace">{now_utc}</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    _, ref_col = st.columns([8, 1])
     with ref_col:
-        st.markdown("<div style='padding-top:18px'></div>", unsafe_allow_html=True)
-        if st.button("🔄 Yenile", use_container_width=True):
+        if st.button("↺ Yenile", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
-    # ── Sistem durumu ─────────────────────────────────────────────
-    cf_url_file = Path(__file__).parent / ".cloudflare_url"
-    cf_url = cf_url_file.read_text().strip() if cf_url_file.exists() else ""
-    api_ok  = bool(os.getenv("ANTHROPIC_API_KEY"))
-    tg_tok  = bool(os.getenv("TELEGRAM_BOT_TOKEN"))
-    wh_ok   = bool(cf_url)
-
-    st1, st2, st3, st4 = st.columns(4)
-    with st1:
-        st.markdown(f"{'🟢' if api_ok else '🔴'} **Claude API**")
-        st.caption("Bağlı" if api_ok else "API key eksik")
-    with st2:
-        st.markdown(f"{'🟢' if tg_tok else '🔴'} **Telegram**")
-        st.caption("Bağlı" if tg_tok else "Token eksik")
-    with st3:
-        st.markdown(f"{'🟢' if wh_ok else '🟡'} **Webhook**")
-        st.caption("Aktif" if wh_ok else "start_webhook.sh çalıştır")
-    with st4:
-        if btc_price:
-            sign   = "+" if (btc_pct or 0) >= 0 else ""
-            color  = "#00c853" if (btc_pct or 0) >= 0 else "#ff1744"
-            st.markdown(
-                f"**BTC** &nbsp; <span style='font-size:1.2rem;font-weight:700'>"
-                f"${btc_price:,.0f}</span> "
-                f"<span style='color:{color};font-size:0.9rem'>{sign}{btc_pct:.2f}%</span>",
-                unsafe_allow_html=True,
-            )
-            st.caption("Binance spot · 30s cache")
-        else:
-            st.markdown("**BTC** &nbsp; —")
-            st.caption("Fiyat alınamadı")
-
-    st.divider()
-
-    # ── HTF Bias Durumu ───────────────────────────────────────────
+    # ── HTF Bias ──────────────────────────────────────────────────
     htf_biases = ltf_service.get_all_htf_biases()
     if htf_biases:
-        st.markdown("##### HTF Bias")
-        bias_icons  = {"BULLISH": "🟢", "BEARISH": "🔴", "RANGING": "🟡"}
-        bias_colors = {"BULLISH": "#00c853", "BEARISH": "#ff1744", "RANGING": "#ff9100"}
-        htf_cols = st.columns(min(len(htf_biases), 4))
-        for col, hb in zip(htf_cols, htf_biases[:4]):
+        cards_html = ""
+        for hb in htf_biases[:4]:
             bias  = hb["bias"]
-            icon  = bias_icons.get(bias, "⚪")
-            color = bias_colors.get(bias, "#ffffff")
-            score = hb.get("score") or ""
+            cls   = {"BULLISH": "htf-bull", "BEARISH": "htf-bear"}.get(bias, "htf-ranging")
+            val   = {"BULLISH": "▲ BULLISH", "BEARISH": "▼ BEARISH", "RANGING": "◆ RANGING"}.get(bias, bias)
+            score = hb.get("score") or "—"
             ts    = hb.get("updated_at", "")[:16].replace("T", " ")
-            with col:
-                st.markdown(
-                    f"<div style='background:rgba(255,255,255,0.04);border-radius:8px;"
-                    f"padding:10px 14px;border-left:4px solid {color}'>"
-                    f"<div style='font-size:0.78rem;color:#888'>{hb['symbol']}</div>"
-                    f"<div style='font-size:1.2rem;font-weight:700;color:{color}'>{icon} {bias}</div>"
-                    f"<div style='font-size:0.75rem;color:#888'>{score}  {ts}</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-        st.divider()
+            cards_html += (
+                f"<div class='htf-card {cls}'>"
+                f"<div class='htf-sym'>{hb['symbol']} · 4H</div>"
+                f"<div class='htf-val'>{val}</div>"
+                f"<div class='htf-meta'>{score} &nbsp;·&nbsp; {ts}</div>"
+                f"</div>"
+            )
+        st.markdown(f"<div class='htf-grid'>{cards_html}</div>", unsafe_allow_html=True)
 
-    # ── Bugün özeti ──────────────────────────────────────────────
-    st.markdown("##### Bugün")
-    d1, d2, d3, d4, d5 = st.columns(5)
-    d1.metric("BULL GATE",    bull_today)
-    d2.metric("BEAR GATE",    bear_today)
-    d3.metric("Toplam Alert", len(today_alerts))
-    d4.metric("Açık İşlem",  len(running_trades))
-    pnl_color = "normal" if tstats["total_pnl"] >= 0 else "inverse"
-    d5.metric("Toplam P&L",  f"${tstats['total_pnl']:+,.2f}", delta_color=pnl_color)
+    # ── Stats Row ─────────────────────────────────────────────────
+    pnl = tstats["total_pnl"]
+    pnl_cls = "sn-pos" if pnl >= 0 else "sn-neg"
+    pnl_str = f"${pnl:+,.0f}"
+    st.markdown(f"""
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-num sn-green">{bull_today}</div>
+    <div class="stat-lbl">Bull Gate · Bugün</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num sn-red">{bear_today}</div>
+    <div class="stat-lbl">Bear Gate · Bugün</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num sn-white">{len(today_alerts)}</div>
+    <div class="stat-lbl">Toplam Alert</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num sn-blue">{len(running_trades)}</div>
+    <div class="stat-lbl">Açık İşlem</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num {pnl_cls}">{pnl_str}</div>
+    <div class="stat-lbl">Toplam P&L</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-    st.divider()
-
-    # ── Ana içerik: son sinyal + son analiz ──────────────────────
+    # ── Ana İçerik ────────────────────────────────────────────────
     left_col, right_col = st.columns([3, 2])
 
     with left_col:
-        st.markdown("##### Son GATE Sinyali")
+        st.markdown("<div class='sec-lbl'>Son Gate Sinyali</div>", unsafe_allow_html=True)
+
         if last_gate:
-            msg    = last_gate.get("message", "")
-            symbol = last_gate.get("symbol", "?")
-            tf     = last_gate.get("timeframe", "?")
-            ts     = last_gate.get("created_at", "")[:16].replace("T", " ")
-            mu     = msg.upper()
+            msg     = last_gate.get("message", "")
+            symbol  = last_gate.get("symbol", "?")
+            tf      = last_gate.get("timeframe", "?")
+            ts      = last_gate.get("created_at", "")[:16].replace("T", " ")
+            mu      = msg.upper()
             is_bull = "BULL GATE" in mu
             p       = _parse_gate(msg)
-            cls     = "gate-bull" if is_bull else "gate-bear"
-            icon    = "🟢" if is_bull else "🔴"
-            title   = "BULL GATE ✓" if is_bull else "BEAR GATE ✓"
+            hdr_cls = "gate-bull-hdr" if is_bull else "gate-bear-hdr"
+            lbl     = "BULL GATE ✓" if is_bull else "BEAR GATE ✓"
 
-            rows = [f"📍 Entry : <b>{_fmt(p.get('entry','?'))}</b>"]
-            if p.get("sl"):
-                rows.append(f"🛑 SL &nbsp;&nbsp;&nbsp;: {_fmt(p['sl'])} "
-                             f"<span style='color:#888'>({_pct(p.get('entry',0), p['sl'])})</span>")
-            if p.get("tp"):
-                rows.append(f"🎯 TP &nbsp;&nbsp;&nbsp;: {_fmt(p['tp'])} "
-                             f"<span style='color:#888'>({_pct(p.get('entry',0), p['tp'])})</span>")
-            if p.get("sl") and p.get("tp"):
+            entry_v = p.get("entry", "")
+            sl_v    = p.get("sl", "")
+            tp_v    = p.get("tp", "")
+            score_v = p.get("score", "")
+
+            sl_sub = f"<span class='gi-sub'>({_pct(entry_v, sl_v)})</span>" if sl_v else ""
+            tp_sub = f"<span class='gi-sub'>({_pct(entry_v, tp_v)})</span>" if tp_v else ""
+
+            rr_html = ""
+            if sl_v and tp_v and entry_v:
                 try:
-                    rr = abs(float(p["tp"]) - float(p["entry"])) / abs(float(p["entry"]) - float(p["sl"]))
-                    rows.append(f"📊 R/R &nbsp;&nbsp;: <b>1:{rr:.1f}</b>")
+                    rr = abs(float(tp_v) - float(entry_v)) / abs(float(entry_v) - float(sl_v))
+                    rr_html = f"<div class='gate-item'><span class='gi-lbl'>R / R</span><span class='gi-val b'>1 : {rr:.1f}</span></div>"
                 except Exception:
                     pass
-            if p.get("score"):
-                rows.append(f"⚡ Score : {p['score']}/10")
+
+            score_bar_html = ""
+            if score_v:
+                pct = int(score_v) / 10 * 100
+                fill_cls = "gsb-fill-bull" if is_bull else "gsb-fill-bear"
+                score_bar_html = (
+                    f"<div class='gate-score-bar'>"
+                    f"<div class='{fill_cls}' style='width:{pct}%'></div>"
+                    f"</div>"
+                )
 
             st.markdown(f"""
-<div class="gate-card {cls}" style="font-size:1.05rem">
-  <div class="gate-title" style="font-size:1.3rem">{icon} {title} &nbsp;·&nbsp; {symbol} &nbsp;·&nbsp; {tf}</div>
-  {"<br>".join(f'<div class="gate-row">{r}</div>' for r in rows)}
-  <div class="gate-time">⏰ {ts}</div>
+<div class="gate-main">
+  <div class="gate-main-hdr {hdr_cls}">
+    <span>{lbl}</span>
+    <span style="font-size:0.72rem;opacity:0.7">{symbol} &nbsp;·&nbsp; {tf}</span>
+  </div>
+  <div class="gate-body">
+    <div class="gate-item">
+      <span class="gi-lbl">Entry</span>
+      <span class="gi-val" style="font-size:1.05rem;font-weight:700">{_fmt(entry_v) if entry_v else '—'}</span>
+    </div>
+    <div class="gate-item">
+      <span class="gi-lbl">Stop Loss</span>
+      <span class="gi-val r">{_fmt(sl_v) if sl_v else '—'} {sl_sub}</span>
+    </div>
+    <div class="gate-item">
+      <span class="gi-lbl">Take Profit</span>
+      <span class="gi-val g">{_fmt(tp_v) if tp_v else '—'} {tp_sub}</span>
+    </div>
+    {rr_html}
+    <div class="gate-item">
+      <span class="gi-lbl">Score</span>
+      <span class="gi-val">{score_v}/10</span>
+    </div>
+    {score_bar_html}
+    <div class="gate-ts">⏰ &nbsp;{ts}</div>
+  </div>
 </div>
 """, unsafe_allow_html=True)
         else:
-            st.info("Henüz GATE sinyali yok.")
+            st.markdown(
+                "<div style='padding:24px;text-align:center;color:#3d4a58;"
+                "border:1px dashed rgba(255,255,255,0.07);border-radius:12px;"
+                "font-size:0.85rem'>Henüz GATE sinyali yok</div>",
+                unsafe_allow_html=True,
+            )
 
-        # ── Açık işlemler ─────────────────────────────────────────
+        # ── Açık İşlemler ─────────────────────────────────────────
         if running_trades:
-            st.markdown("##### Açık İşlemler")
+            st.markdown("<div class='sec-lbl' style='margin-top:18px'>Açık İşlemler</div>", unsafe_allow_html=True)
             for tr in running_trades:
-                dicon = "🟢" if tr["direction"] == "LONG" else "🔴"
+                is_long = tr["direction"] == "LONG"
+                dir_cls = "trade-long" if is_long else "trade-short"
+                dir_lbl = "▲ LONG" if is_long else "▼ SHORT"
                 entry_v = tr.get("entry") or 0
                 sl_v    = tr.get("sl") or 0
                 tp_v    = tr.get("tp") or 0
                 risk_v  = tr.get("risk_usd") or 0
-                sl_pct  = _pct(entry_v, sl_v) if sl_v else ""
-                tp_pct  = _pct(entry_v, tp_v) if tp_v else ""
-                st.markdown(
-                    f"{dicon} **{tr['symbol']}** {tr['direction']} &nbsp;|&nbsp; "
-                    f"Entry: `{_fmt(entry_v)}` &nbsp;|&nbsp; "
-                    f"SL: `{_fmt(sl_v)}` {sl_pct} &nbsp;|&nbsp; "
-                    f"TP: `{_fmt(tp_v)}` {tp_pct} &nbsp;|&nbsp; "
-                    f"Risk: ${risk_v:.0f}",
-                    unsafe_allow_html=True,
-                )
+                st.markdown(f"""
+<div class="trade-card">
+  <div class="trade-hdr">
+    <span><span class="trade-sym">{tr['symbol']}</span> &nbsp; <span class="{dir_cls}">{dir_lbl}</span></span>
+    <span class="trade-risk">Risk: ${risk_v:.0f}</span>
+  </div>
+  <div class="trade-levels">
+    <span>Entry<span class="tl-val">{_fmt(entry_v)}</span></span>
+    <span>SL<span class="tl-val" style="color:#ff3366">{_fmt(sl_v)}</span><span style="color:#3d4a58;font-size:0.68rem"> {_pct(entry_v,sl_v)}</span></span>
+    <span>TP<span class="tl-val" style="color:#00ff88">{_fmt(tp_v)}</span><span style="color:#3d4a58;font-size:0.68rem"> {_pct(entry_v,tp_v)}</span></span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+        # ── İşlem Özeti ───────────────────────────────────────────
+        if tstats["closed"] > 0:
+            wr = tstats["winrate"]
+            wr_color = "#00ff88" if wr >= 50 else "#ff3366"
+            st.markdown(f"""
+<div style="display:flex;gap:16px;margin-top:12px;padding:12px 16px;
+background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);
+border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:0.8rem">
+  <span style="color:#3d4a58">WIN RATE <span style="color:{wr_color};font-weight:700">{wr}%</span></span>
+  <span style="color:#3d4a58">AVG R:R <span style="color:#4fc3f7;font-weight:700">{tstats['avg_rr']}</span></span>
+  <span style="color:#3d4a58"><span style="color:#00ff88">{tstats['wins']}W</span> / <span style="color:#ff3366">{tstats['losses']}L</span> / <span style="color:#7f8c9a">{tstats['be']}BE</span></span>
+</div>
+""", unsafe_allow_html=True)
 
     with right_col:
-        # ── Son 5 alert ───────────────────────────────────────────
-        st.markdown("##### Son Sinyaller")
+        # ── Sinyal Feed ───────────────────────────────────────────
+        st.markdown("<div class='sec-lbl'>Sinyal Akışı</div>", unsafe_allow_html=True)
         if alerts:
-            for a in alerts[:6]:
+            items_html = ""
+            for a in alerts[:7]:
                 mu  = a.get("message", "").upper()
                 sym = a.get("symbol", "?")
                 tf  = a.get("timeframe", "?")
                 ts  = a.get("created_at", "")[:16].replace("T", " ")
                 if "BULL GATE" in mu:
-                    ico = "🟢"
-                    lbl = "BULL GATE"
+                    ico_cls, lbl = "sf-ico-bull", "BG ▲"
                 elif "BEAR GATE" in mu:
-                    ico = "🔴"
-                    lbl = "BEAR GATE"
+                    ico_cls, lbl = "sf-ico-bear", "BG ▼"
                 elif any(k in mu for k in ("CHOCH","BOS","HTF","TRIGGER")):
-                    ico = "📈" if any(k in mu for k in ("BULL","BULLISH")) else "📉"
-                    lbl = "HTF"
+                    ico_cls = "sf-ico-htf"
+                    lbl = "HTF ▲" if any(k in mu for k in ("BULL","BULLISH")) else "HTF ▼"
                 else:
-                    ico = "⚡"
-                    lbl = "Alert"
-                st.markdown(
-                    f"{ico} **{lbl}** &nbsp; {sym} · {tf}"
-                    f"<br><span style='font-size:0.75rem;color:#888'>{ts}</span>",
-                    unsafe_allow_html=True,
+                    ico_cls, lbl = "sf-ico-gen", "ALT"
+                items_html += (
+                    f"<div class='sf-item'>"
+                    f"<span class='sf-ico {ico_cls}'>{lbl}</span>"
+                    f"<span class='sf-pair'>{sym}</span>"
+                    f"<span class='sf-tf'>· {tf}</span>"
+                    f"<span class='sf-time'>{ts[11:]}</span>"
+                    f"</div>"
                 )
-                st.markdown("<hr style='margin:4px 0;border-color:#333'>", unsafe_allow_html=True)
+            st.markdown(f"""
+<div class="sf-wrap">
+  <div class="sf-hdr">Canlı Feed</div>
+  {items_html}
+</div>
+""", unsafe_allow_html=True)
         else:
-            st.caption("Henüz sinyal yok.")
+            st.markdown(
+                "<div style='padding:20px;text-align:center;color:#3d4a58;"
+                "border:1px dashed rgba(255,255,255,0.07);border-radius:12px;"
+                "font-size:0.82rem'>Sinyal bekleniyor…</div>",
+                unsafe_allow_html=True,
+            )
 
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-        # ── Son AI analizi ────────────────────────────────────────
-        st.markdown("##### Son AI Analizi")
+        # ── Son AI Analizi ────────────────────────────────────────
         if analyses:
             a = analyses[0]
             bias = a.get("bias", "—")
-            bias_colors = {
-                "BULLISH": "#00c853", "BEARISH": "#ff1744",
-                "RANGING": "#ff9100", "NO_TRADE": "#9e9e9e",
-            }
-            color = bias_colors.get(bias, "#ffffff")
-            st.markdown(
-                f"<span style='color:{color};font-size:1.1rem;font-weight:700'>{bias}</span> "
-                f"&nbsp; {a.get('symbol','?')} · {a.get('timeframe','?')}<br>"
-                f"<span style='font-size:0.8rem;color:#888'>Güven: {a.get('confidence','?')}/10 &nbsp;·&nbsp; {a.get('created_at','')[:16]}</span>",
-                unsafe_allow_html=True,
-            )
-            if a.get("summary"):
-                st.caption(a["summary"][:180] + ("…" if len(a.get("summary","")) > 180 else ""))
-        else:
-            st.caption("Henüz analiz yok.")
-
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-        # ── Equity özeti ──────────────────────────────────────────
-        if tstats["closed"] > 0:
-            st.markdown("##### İşlem Özeti")
-            st.markdown(
-                f"Win Rate: **{tstats['winrate']}%** &nbsp;|&nbsp; "
-                f"Ort. R:R: **{tstats['avg_rr']}** &nbsp;|&nbsp; "
-                f"{tstats['wins']}W / {tstats['losses']}L / {tstats['be']}BE"
-            )
+            bias_cls = {"BULLISH":"ai-bull","BEARISH":"ai-bear","RANGING":"ai-ranging"}.get(bias,"ai-neutral")
+            bias_lbl = {"BULLISH":"▲ BULLISH","BEARISH":"▼ BEARISH","RANGING":"◆ RANGING"}.get(bias, bias)
+            conf  = a.get("confidence","?")
+            sym   = a.get("symbol","?")
+            tf    = a.get("timeframe","?")
+            ats   = a.get("created_at","")[:16].replace("T"," ")
+            summ  = (a.get("summary","") or "")[:160]
+            summ_html = f"<div class='ai-summary'>{summ}{'…' if len(a.get('summary',''))>160 else ''}</div>" if summ else ""
+            st.markdown(f"""
+<div class="ai-card" style="margin-top:14px">
+  <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.14em;color:#3d4a58;margin-bottom:8px">Son AI Analizi</div>
+  <div class="ai-top">
+    <span class="ai-bias-lbl {bias_cls}">{bias_lbl}</span>
+    <span class="ai-meta">{conf}/10</span>
+  </div>
+  <div class="ai-meta">{sym} · {tf} &nbsp;·&nbsp; {ats}</div>
+  {summ_html}
+</div>
+""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SAYFA: ANALİZ
