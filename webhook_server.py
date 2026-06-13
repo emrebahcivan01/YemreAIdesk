@@ -30,7 +30,7 @@ except ImportError:
     print("FastAPI kurulu değil. Çalıştır: pip install fastapi uvicorn")
     sys.exit(1)
 
-from app.services import journal_service, telegram_service, pipeline_service
+from app.services import journal_service, telegram_service, pipeline_service, ltf_service
 
 app = FastAPI(
     title="Yemre AI Trading Desk – Webhook",
@@ -199,6 +199,21 @@ async def tradingview_alert(request: Request):
             source="tradingview",
         )
 
+        # LTF Motor: HTF bias alertiyse durumu güncelle
+        msg_up = message.upper()
+        is_htf_signal = any(k in msg_up for k in ("CHOCH", "BOS", "HTF", "TRIGGER", "BULLISH", "BEARISH"))
+        is_gate = "BULL GATE" in msg_up or "BEAR GATE" in msg_up
+        alignment = None
+
+        if is_htf_signal and not is_gate:
+            bias, score = ltf_service.parse_htf_bias_from_message(message)
+            if bias:
+                ltf_service.update_htf_bias(symbol=symbol, bias=bias, score=score, raw_message=message)
+
+        if is_gate:
+            direction = "BULL" if "BULL GATE" in msg_up else "BEAR"
+            alignment = ltf_service.validate_gate(symbol=symbol, direction=direction)
+
         # Otomatik Telegram
         auto_notify = os.getenv("WEBHOOK_AUTO_TELEGRAM", "false").lower() == "true"
         tg_sent = False
@@ -230,6 +245,7 @@ async def tradingview_alert(request: Request):
             "timeframe": timeframe,
             "telegram_sent": tg_sent,
             "pipeline_started": pipeline_started,
+            "alignment": alignment,
         })
 
     except Exception as e:

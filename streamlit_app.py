@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import streamlit as st
-from app.services import ai_service, telegram_service, journal_service, tradingview_service
+from app.services import ai_service, telegram_service, journal_service, tradingview_service, ltf_service
 
 # ─── Sayfa yapılandırması ───────────────────────────────────────────────────
 st.set_page_config(
@@ -177,6 +177,31 @@ if page == "Dashboard":
             st.caption("Fiyat alınamadı")
 
     st.divider()
+
+    # ── HTF Bias Durumu ───────────────────────────────────────────
+    htf_biases = ltf_service.get_all_htf_biases()
+    if htf_biases:
+        st.markdown("##### HTF Bias")
+        bias_icons  = {"BULLISH": "🟢", "BEARISH": "🔴", "RANGING": "🟡"}
+        bias_colors = {"BULLISH": "#00c853", "BEARISH": "#ff1744", "RANGING": "#ff9100"}
+        htf_cols = st.columns(min(len(htf_biases), 4))
+        for col, hb in zip(htf_cols, htf_biases[:4]):
+            bias  = hb["bias"]
+            icon  = bias_icons.get(bias, "⚪")
+            color = bias_colors.get(bias, "#ffffff")
+            score = hb.get("score") or ""
+            ts    = hb.get("updated_at", "")[:16].replace("T", " ")
+            with col:
+                st.markdown(
+                    f"<div style='background:rgba(255,255,255,0.04);border-radius:8px;"
+                    f"padding:10px 14px;border-left:4px solid {color}'>"
+                    f"<div style='font-size:0.78rem;color:#888'>{hb['symbol']}</div>"
+                    f"<div style='font-size:1.2rem;font-weight:700;color:{color}'>{icon} {bias}</div>"
+                    f"<div style='font-size:0.75rem;color:#888'>{score}  {ts}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+        st.divider()
 
     # ── Bugün özeti ──────────────────────────────────────────────
     st.markdown("##### Bugün")
@@ -941,7 +966,7 @@ elif page == "Journal":
 elif page == "Alertler":
     import re
     from datetime import datetime, timezone, timedelta
-    from app.services import pipeline_service, tradingview_service as _tv_svc
+    from app.services import pipeline_service, tradingview_service as _tv_svc, ltf_service
     tradingview_service = _tv_svc
 
     # ── Yardımcı fonksiyonlar ────────────────────────────────────
@@ -1018,6 +1043,17 @@ elif page == "Alertler":
   <div class="gate-time">⏰ {ts}</div>
 </div>
 """, unsafe_allow_html=True)
+
+                        # LTF alignment durumu
+                direction = "BULL" if is_bull_gate else "BEAR"
+                al = ltf_service.validate_gate(symbol=symbol, direction=direction)
+                if al["htf_bias"] is not None:
+                    if al["aligned"] is True:
+                        st.success(f"✓ {al['reason']}")
+                    elif al["aligned"] is False:
+                        st.warning(f"⚠ {al['reason']}")
+                else:
+                    st.caption(al["reason"])
 
                 # Pipeline durumu
                 ps = pipeline_service.get_status(aid)
