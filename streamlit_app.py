@@ -572,19 +572,17 @@ border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:0.8rem">
 # SAYFA: ANALİZ
 # ─────────────────────────────────────────────────────────────────────────────
 if page == "Analiz":
-    st.header("Chart Analizi")
+    st.markdown("<div class='sec-lbl' style='font-size:0.8rem;margin-bottom:16px'>⬡ Chart AI Analizi</div>", unsafe_allow_html=True)
 
     col_left, col_right = st.columns([1, 1.6])
 
     with col_left:
-        st.subheader("Giriş")
-
+        st.markdown("<div class='sec-lbl'>Grafik Yükle</div>", unsafe_allow_html=True)
         uploaded = st.file_uploader(
             "TradingView Screenshot",
             type=["png", "jpg", "jpeg", "webp"],
-            help="TradingView ekran görüntüsünü buraya yükle",
+            label_visibility="collapsed",
         )
-
         if uploaded:
             st.image(uploaded, use_container_width=True)
 
@@ -592,18 +590,15 @@ if page == "Analiz":
         timeframe_options = ["1M", "3M", "5M", "15M", "30M", "1H", "2H", "4H", "1D", "1W"]
         timeframe = st.selectbox("Timeframe", timeframe_options, index=5)
         manual_note = st.text_area(
-            "Manuel Not (isteğe bağlı)",
-            placeholder="Dikkat ettiğin özel bir durum, haber, likidite bölgesi vb.",
-            height=100,
+            "Manuel Not",
+            placeholder="Haber, özel durum, likidite bölgesi...",
+            height=80,
         )
-
-        analyze_btn = st.button("Analiz Et", type="primary", use_container_width=True, disabled=not uploaded)
+        analyze_btn = st.button("⬡ Analiz Et", type="primary", use_container_width=True, disabled=not uploaded)
         if not uploaded:
-            st.caption("Screenshot yükleyince analiz butonu aktif olur.")
+            st.markdown("<div style='font-size:0.72rem;color:#3d4a58;margin-top:4px'>Screenshot yükleyince aktif olur</div>", unsafe_allow_html=True)
 
     with col_right:
-        st.subheader("Analiz Sonucu")
-
         if "last_analysis" not in st.session_state:
             st.session_state.last_analysis = None
             st.session_state.last_analysis_id = None
@@ -611,14 +606,13 @@ if page == "Analiz":
 
         if analyze_btn and uploaded:
             if not api_ok:
-                st.error("ANTHROPIC_API_KEY eksik. .env dosyasını kontrol et.")
+                st.error("ANTHROPIC_API_KEY eksik.")
             else:
                 image_bytes = uploaded.read()
                 ext = uploaded.name.rsplit(".", 1)[-1].lower()
                 media_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
                 media_type = media_map.get(ext, "image/png")
-
-                with st.spinner("AI grafiği analiz ediyor..."):
+                with st.spinner("Claude grafiği analiz ediyor…"):
                     try:
                         result = ai_service.analyze_chart(
                             image_bytes=image_bytes,
@@ -636,89 +630,104 @@ if page == "Analiz":
 
         result = st.session_state.last_analysis
         if result:
-            # Bias rengi
-            bias_class = {
-                "BULLISH": "bias-bullish",
-                "BEARISH": "bias-bearish",
-                "RANGING": "bias-ranging",
-            }.get(result.bias, "bias-notrade")
-            bias_icon = {"BULLISH": "YUKARI", "BEARISH": "ASAGI", "RANGING": "YATAY"}.get(result.bias, result.bias)
+            bias_colors = {"BULLISH": "#00ff88", "BEARISH": "#ff3366", "RANGING": "#ffd32a"}
+            bias_labels = {"BULLISH": "▲ BULLISH", "BEARISH": "▼ BEARISH", "RANGING": "◆ RANGING"}
+            b_color = bias_colors.get(result.bias, "#5a6878")
+            b_label = bias_labels.get(result.bias, result.bias)
+            conf_pct = result.confidence / 10 * 100
 
-            st.markdown(f'<div class="{bias_class}">{bias_icon} {result.bias}</div>', unsafe_allow_html=True)
-            st.progress(result.confidence / 10, text=f"Güven: {result.confidence}/10")
+            st.markdown(f"""
+<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);
+border-left:3px solid {b_color};border-radius:12px;padding:16px 20px;margin-bottom:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <span style="color:{b_color};font-size:1.4rem;font-weight:700;font-family:'JetBrains Mono',monospace">{b_label}</span>
+    <span style="color:#5a6878;font-size:0.78rem;font-family:'JetBrains Mono',monospace">{result.symbol} · {result.timeframe}</span>
+  </div>
+  <div style="margin-top:10px;height:3px;background:rgba(255,255,255,0.07);border-radius:2px">
+    <div style="height:100%;width:{conf_pct}%;background:{b_color};border-radius:2px"></div>
+  </div>
+  <div style="font-size:0.68rem;color:#3d4a58;margin-top:5px;font-family:'JetBrains Mono',monospace">GÜVEN: {result.confidence}/10</div>
+</div>
+""", unsafe_allow_html=True)
 
             tab_summary, tab_scenarios, tab_levels, tab_telegram = st.tabs(
                 ["Özet", "Senaryolar", "Seviyeler", "Telegram"]
             )
 
             with tab_summary:
-                st.write(result.summary)
+                st.markdown(f"<div style='color:#c0cad6;line-height:1.7;font-size:0.9rem'>{result.summary}</div>", unsafe_allow_html=True)
                 if result.market_structure:
-                    st.markdown("**Piyasa Yapısı**")
-                    st.write(result.market_structure)
+                    st.markdown(f"""
+<div style="margin-top:12px;padding:12px 16px;background:rgba(79,195,247,0.05);
+border:1px solid rgba(79,195,247,0.12);border-radius:10px;font-size:0.85rem;color:#8ab4cc">
+<span style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;color:#4fc3f7">Piyasa Yapısı</span><br><br>
+{result.market_structure}</div>""", unsafe_allow_html=True)
                 if result.risk_notes:
-                    st.warning(result.risk_notes)
+                    st.markdown(f"""
+<div style="margin-top:10px;padding:12px 16px;background:rgba(255,211,42,0.05);
+border:1px solid rgba(255,211,42,0.15);border-radius:10px;font-size:0.85rem;color:#c8a800">
+⚠ {result.risk_notes}</div>""", unsafe_allow_html=True)
                 if result.no_trade_conditions:
-                    st.markdown("**İşlem Alınmamalı Çünkü:**")
-                    for c in result.no_trade_conditions:
-                        st.markdown(f"- {c}")
+                    items = "".join(f"<div style='padding:3px 0;color:#7f8c9a'>· {c}</div>" for c in result.no_trade_conditions)
+                    st.markdown(f"""
+<div style="margin-top:10px;padding:12px 16px;background:rgba(255,51,102,0.05);
+border:1px solid rgba(255,51,102,0.12);border-radius:10px;font-size:0.83rem">
+<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;color:#ff3366;margin-bottom:8px">İşlem Alınmaz</div>
+{items}</div>""", unsafe_allow_html=True)
 
             with tab_scenarios:
                 col_l, col_s = st.columns(2)
                 with col_l:
-                    st.markdown("**Long Senaryo**")
-                    st.info(result.long_scenario)
+                    st.markdown(f"""
+<div style="padding:14px;background:rgba(0,255,136,0.04);border:1px solid rgba(0,255,136,0.15);
+border-radius:10px;font-size:0.84rem;color:#8abba0;line-height:1.6">
+<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;color:#00ff88;margin-bottom:8px">▲ Long Senaryo</div>
+{result.long_scenario}</div>""", unsafe_allow_html=True)
                 with col_s:
-                    st.markdown("**Short Senaryo**")
-                    st.error(result.short_scenario)
+                    st.markdown(f"""
+<div style="padding:14px;background:rgba(255,51,102,0.04);border:1px solid rgba(255,51,102,0.15);
+border-radius:10px;font-size:0.84rem;color:#bb8a90;line-height:1.6">
+<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;color:#ff3366;margin-bottom:8px">▼ Short Senaryo</div>
+{result.short_scenario}</div>""", unsafe_allow_html=True)
 
             with tab_levels:
                 kl = result.key_levels
                 resistances = kl.get("resistance", [])
-                supports = kl.get("support", [])
+                supports    = kl.get("support", [])
                 col_r, col_s = st.columns(2)
                 with col_r:
-                    st.markdown("**Direnç Seviyeleri**")
-                    for lvl in resistances:
-                        st.markdown(f"- 🔴 {lvl}")
+                    r_items = "".join(f"<div style='padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-family:\"JetBrains Mono\",monospace;font-size:0.85rem;color:#e0e6ed'>{lvl}</div>" for lvl in resistances)
+                    st.markdown(f"""
+<div style="padding:12px 16px;background:rgba(255,51,102,0.04);border:1px solid rgba(255,51,102,0.12);border-radius:10px">
+<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;color:#ff3366;margin-bottom:8px">▼ Direnç</div>
+{r_items or '<div style="color:#3d4a58;font-size:0.8rem">—</div>'}</div>""", unsafe_allow_html=True)
                 with col_s:
-                    st.markdown("**Destek Seviyeleri**")
-                    for lvl in supports:
-                        st.markdown(f"- 🟢 {lvl}")
+                    s_items = "".join(f"<div style='padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-family:\"JetBrains Mono\",monospace;font-size:0.85rem;color:#e0e6ed'>{lvl}</div>" for lvl in supports)
+                    st.markdown(f"""
+<div style="padding:12px 16px;background:rgba(0,255,136,0.04);border:1px solid rgba(0,255,136,0.12);border-radius:10px">
+<div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.12em;color:#00ff88;margin-bottom:8px">▲ Destek</div>
+{s_items or '<div style="color:#3d4a58;font-size:0.8rem">—</div>'}</div>""", unsafe_allow_html=True)
 
             with tab_telegram:
-                # Kanal seçici
                 channels = telegram_service.get_channels()
                 has_tg = bool(channels and os.getenv("TELEGRAM_BOT_TOKEN"))
-
                 if channels:
-                    selected_channel_name = st.selectbox(
-                        "Kanal Seç",
-                        list(channels.keys()),
-                        key="tg_channel",
-                    )
+                    selected_channel_name = st.selectbox("Kanal", list(channels.keys()), key="tg_channel")
                     selected_chat_id = channels[selected_channel_name]
                 else:
                     selected_chat_id = None
-                    st.caption("Telegram kanalı yapılandırılmamış (.env)")
+                    st.markdown("<div style='font-size:0.8rem;color:#5a6878'>Telegram kanalı .env'de yapılandırılmamış</div>", unsafe_allow_html=True)
 
-                # XAU sinyal numarası
                 sym_upper = result.symbol.upper()
                 if any(x in sym_upper for x in ("XAU", "GOLD")):
                     sig_num = journal_service.get_daily_signal_number(result.symbol)
-                    st.info(f"XAU Sinyal #{sig_num} (bugün)")
+                    st.markdown(f"<div style='font-size:0.8rem;color:#ffd32a;margin-bottom:8px'>⚡ XAU Sinyal #{sig_num} (bugün)</div>", unsafe_allow_html=True)
 
-                tg_text = st.text_area(
-                    "Telegram Mesajı (düzenleyebilirsin)",
-                    value=result.telegram_message,
-                    height=200,
-                    key="tg_edit",
-                )
+                tg_text = st.text_area("Mesaj", value=result.telegram_message, height=200, key="tg_edit")
 
                 col_send, col_photo, col_save = st.columns(3)
-
                 with col_send:
-                    if st.button("Mesaj Gönder", use_container_width=True, disabled=not has_tg):
+                    if st.button("✈ Mesaj Gönder", use_container_width=True, disabled=not has_tg):
                         ok, msg = telegram_service.send_message(tg_text, chat_id=selected_chat_id)
                         if ok:
                             st.success(msg)
@@ -726,21 +735,11 @@ if page == "Analiz":
                                 journal_service.mark_telegram_sent(st.session_state.last_analysis_id)
                         else:
                             st.error(f"Gönderilemedi: {msg}")
-                    if not has_tg:
-                        st.caption("Telegram yapılandırılmamış")
-
                 with col_photo:
                     has_img = st.session_state.last_image_bytes is not None
-                    if st.button(
-                        "Fotoğraf + Mesaj",
-                        use_container_width=True,
-                        disabled=not (has_tg and has_img),
-                        help="Screenshot + mesajı birlikte gönderir",
-                    ):
+                    if st.button("🖼 Fotoğraf + Mesaj", use_container_width=True, disabled=not (has_tg and has_img)):
                         ok, msg = telegram_service.send_photo(
-                            st.session_state.last_image_bytes,
-                            caption=tg_text[:1024],
-                            chat_id=selected_chat_id,
+                            st.session_state.last_image_bytes, caption=tg_text[:1024], chat_id=selected_chat_id,
                         )
                         if ok:
                             st.success(msg)
@@ -748,27 +747,27 @@ if page == "Analiz":
                                 journal_service.mark_telegram_sent(st.session_state.last_analysis_id)
                         else:
                             st.error(f"Gönderilemedi: {msg}")
-                    if not has_img:
-                        st.caption("Görsel için screenshot yükle")
-
                 with col_save:
-                    if st.button("Journal'a Kaydet", use_container_width=True):
+                    if st.button("◎ Journal'a Kaydet", use_container_width=True):
                         if st.session_state.last_analysis_id is None:
-                            aid = journal_service.save_analysis(
-                                result,
-                                manual_note=manual_note,
-                            )
+                            aid = journal_service.save_analysis(result, manual_note=manual_note)
                             st.session_state.last_analysis_id = aid
-                            st.success(f"Kaydedildi (ID: {aid})")
+                            st.success(f"Kaydedildi #{aid}")
                         else:
-                            st.info(f"Zaten kaydedildi (ID: {st.session_state.last_analysis_id})")
+                            st.info(f"Zaten kaydedildi #{st.session_state.last_analysis_id}")
+        else:
+            st.markdown("""
+<div style="height:200px;display:flex;align-items:center;justify-content:center;
+border:1px dashed rgba(255,255,255,0.07);border-radius:12px;color:#3d4a58;font-size:0.85rem">
+Grafik yükle ve Analiz Et'e bas
+</div>""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SAYFA: OTOMATİK TARAMA
 # ─────────────────────────────────────────────────────────────────────────────
 elif page == "Otomatik Tarama":
-    st.header("Otomatik Çok Timeframe Analizi")
-    st.caption("Tek tuşla 5M → 1D arası 7 timeframe'i TradingView'dan çeker ve analiz eder.")
+    st.markdown("<div class='sec-lbl' style='font-size:0.8rem;margin-bottom:16px'>⬡ Otomatik Çok Timeframe Analizi</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:0.8rem;color:#5a6878;margin-bottom:18px'>Tek tuşla 5M → 1D arası 7 timeframe'i TradingView'dan çeker ve analiz eder.</div>", unsafe_allow_html=True)
 
     col_cfg, col_status = st.columns([2, 1])
 
@@ -791,17 +790,35 @@ elif page == "Otomatik Tarama":
         )
 
     with col_status:
-        st.markdown("**Taranacak Timeframe'ler**")
-        for tf, _ in tradingview_service.TIMEFRAMES:
-            st.markdown(f"- {tf}")
+        st.markdown("<div class='sec-lbl'>Timeframe'ler</div>", unsafe_allow_html=True)
+        tf_list_html = "".join(
+            f"<div style='padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);"
+            f"font-family:\"JetBrains Mono\",monospace;font-size:0.8rem;color:#7f8c9a'>{tf}</div>"
+            for tf, _ in tradingview_service.TIMEFRAMES
+        )
+        st.markdown(
+            f"<div style='background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);"
+            f"border-radius:10px;padding:10px 14px;margin-bottom:12px'>{tf_list_html}</div>",
+            unsafe_allow_html=True,
+        )
 
         if tradingview_service.has_session():
-            st.success("TradingView oturumu mevcut")
+            st.markdown(
+                "<div style='padding:8px 12px;background:rgba(0,255,136,0.07);border:1px solid rgba(0,255,136,0.2);"
+                "border-radius:8px;font-size:0.8rem;color:#00ff88;margin-bottom:8px'>"
+                "<span class=\"dot-on\" style=\"display:inline-block;margin-right:6px\"></span> TradingView oturumu mevcut</div>",
+                unsafe_allow_html=True,
+            )
             if st.button("Oturumu Sıfırla", type="secondary"):
                 tradingview_service.clear_session()
                 st.rerun()
         else:
-            st.warning("Oturum yok. Aşağıdaki butona bas, tarayıcıda giriş yap.")
+            st.markdown(
+                "<div style='padding:8px 12px;background:rgba(255,211,42,0.07);border:1px solid rgba(255,211,42,0.2);"
+                "border-radius:8px;font-size:0.8rem;color:#ffd32a;margin-bottom:8px'>"
+                "<span class=\"dot-warn\" style=\"display:inline-block;margin-right:6px\"></span> Oturum yok — giriş gerekli</div>",
+                unsafe_allow_html=True,
+            )
             if st.button("TradingView Girişi Yap", type="primary", use_container_width=True):
                 with st.spinner("Tarayıcı açılıyor — giriş yapınca otomatik kaydedilir..."):
                     try:
@@ -811,9 +828,9 @@ elif page == "Otomatik Tarama":
                     except Exception as e:
                         st.error(f"Giriş kaydedilemedi: {e}")
 
-    st.divider()
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
-    scan_btn = st.button("Tüm Timeframe'leri Tara ve Analiz Et", type="primary", use_container_width=True)
+    scan_btn = st.button("⬡ Tüm Timeframe'leri Tara ve Analiz Et", type="primary", use_container_width=True)
 
     if scan_btn:
         if not api_ok:
@@ -869,21 +886,42 @@ elif page == "Otomatik Tarama":
     # Sonuçları göster
     if "mtf_results" in st.session_state and st.session_state["mtf_results"]:
         mtf = st.session_state["mtf_results"]
-        st.subheader("Sonuçlar")
+        st.markdown("<div class='sec-lbl' style='margin-top:8px'>Analiz Sonuçları</div>", unsafe_allow_html=True)
 
-        # Bias özet tablosu
-        bias_cols = st.columns(len(mtf))
-        bias_colors = {"BULLISH": "🟢", "BEARISH": "🔴", "RANGING": "🟡", "NO_TRADE": "⚫", "INSUFFICIENT_DATA": "⚪"}
-        for col, (tf_name, data) in zip(bias_cols, mtf.items()):
-            with col:
-                if "result" in data:
-                    r = data["result"]
-                    icon = bias_colors.get(r.bias, "⚪")
-                    col.metric(tf_name, f"{icon} {r.bias}", f"{r.confidence}/10")
-                else:
-                    col.metric(tf_name, "HATA", "")
+        # Bias özet kartlar
+        _bc_map = {"BULLISH": "#00ff88", "BEARISH": "#ff3366", "RANGING": "#ffd32a", "NO_TRADE": "#5a6878", "INSUFFICIENT_DATA": "#3d4a58"}
+        _bl_map = {"BULLISH": "▲ BULL", "BEARISH": "▼ BEAR", "RANGING": "◆ RANGING", "NO_TRADE": "— N/T", "INSUFFICIENT_DATA": "— —"}
+        bias_html = ""
+        for tf_name, data in mtf.items():
+            if "result" in data:
+                r = data["result"]
+                clr = _bc_map.get(r.bias, "#5a6878")
+                lbl = _bl_map.get(r.bias, r.bias)
+                cp  = r.confidence / 10 * 100
+                bias_html += (
+                    f"<div style='flex:1;min-width:90px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);"
+                    f"border-top:2px solid {clr};border-radius:10px;padding:10px 12px;text-align:center'>"
+                    f"<div style='font-size:0.6rem;color:#3d4a58;text-transform:uppercase;letter-spacing:0.1em;"
+                    f"font-family:\"JetBrains Mono\",monospace'>{tf_name}</div>"
+                    f"<div style='font-size:0.85rem;font-weight:700;color:{clr};margin:5px 0 4px;"
+                    f"font-family:\"JetBrains Mono\",monospace'>{lbl}</div>"
+                    f"<div style='height:2px;background:rgba(255,255,255,0.06);border-radius:1px'>"
+                    f"<div style='height:100%;width:{cp:.0f}%;background:{clr};opacity:0.6;border-radius:1px'></div></div>"
+                    f"<div style='font-size:0.62rem;color:#3d4a58;margin-top:4px'>{r.confidence}/10</div>"
+                    f"</div>"
+                )
+            else:
+                bias_html += (
+                    f"<div style='flex:1;min-width:90px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,51,102,0.15);"
+                    f"border-radius:10px;padding:10px 12px;text-align:center'>"
+                    f"<div style='font-size:0.6rem;color:#3d4a58;text-transform:uppercase;letter-spacing:0.1em;"
+                    f"font-family:\"JetBrains Mono\",monospace'>{tf_name}</div>"
+                    f"<div style='font-size:0.85rem;font-weight:700;color:#ff3366;margin:5px 0'>HATA</div>"
+                    f"</div>"
+                )
+        st.markdown(f"<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px'>{bias_html}</div>", unsafe_allow_html=True)
 
-        st.divider()
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
         # Detaylı tab'lar
         tab_list = list(mtf.keys())
@@ -904,24 +942,43 @@ elif page == "Otomatik Tarama":
                     st.image(data["screenshot"], caption=f"{tf_name} — {tv_symbol}", use_container_width=True)
 
                 with col_analysis:
-                    bias_class = {
-                        "BULLISH": "bias-bullish",
-                        "BEARISH": "bias-bearish",
-                        "RANGING": "bias-ranging",
-                    }.get(result.bias, "bias-notrade")
-                    bias_icon = {"BULLISH": "YUKARI", "BEARISH": "ASAGI", "RANGING": "YATAY"}.get(result.bias, result.bias)
-                    st.markdown(f'<div class="{bias_class}">{bias_icon} {result.bias}</div>', unsafe_allow_html=True)
-                    st.progress(result.confidence / 10, text=f"Güven: {result.confidence}/10")
+                    _bc = {"BULLISH": "#00ff88", "BEARISH": "#ff3366", "RANGING": "#ffd32a"}.get(result.bias, "#5a6878")
+                    _bl = {"BULLISH": "▲ BULLISH", "BEARISH": "▼ BEARISH", "RANGING": "◆ RANGING"}.get(result.bias, result.bias)
+                    _cp = result.confidence / 10 * 100
+                    st.markdown(f"""
+<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-left:3px solid {_bc};
+border-radius:10px;padding:12px 16px;margin-bottom:10px">
+  <span style="color:{_bc};font-size:1.1rem;font-weight:700;font-family:'JetBrains Mono',monospace">{_bl}</span>
+  <div style="margin-top:8px;height:2px;background:rgba(255,255,255,0.07);border-radius:1px">
+    <div style="height:100%;width:{_cp:.0f}%;background:{_bc};border-radius:1px"></div>
+  </div>
+  <div style="font-size:0.65rem;color:#3d4a58;margin-top:4px;font-family:'JetBrains Mono',monospace">GÜVEN {result.confidence}/10</div>
+</div>""", unsafe_allow_html=True)
 
                     if result.summary:
-                        st.write(result.summary)
+                        st.markdown(f"<div style='font-size:0.82rem;color:#8a9bb0;line-height:1.65;margin-bottom:8px'>{result.summary}</div>", unsafe_allow_html=True)
                     if result.market_structure:
-                        st.markdown(f"**Yapı:** {result.market_structure}")
+                        st.markdown(
+                            f"<div style='font-size:0.8rem;padding:8px 12px;background:rgba(79,195,247,0.05);"
+                            f"border:1px solid rgba(79,195,247,0.12);border-radius:8px;color:#8ab4cc;margin-bottom:6px'>"
+                            f"<span style=\"font-size:0.62rem;text-transform:uppercase;color:#4fc3f7\">Piyasa Yapısı</span>"
+                            f"<br>{result.market_structure}</div>",
+                            unsafe_allow_html=True,
+                        )
                     if result.risk_notes:
-                        st.warning(result.risk_notes)
+                        st.markdown(
+                            f"<div style='font-size:0.8rem;padding:8px 12px;background:rgba(255,211,42,0.05);"
+                            f"border:1px solid rgba(255,211,42,0.15);border-radius:8px;color:#c8a800;margin-bottom:6px'>⚠ {result.risk_notes}</div>",
+                            unsafe_allow_html=True,
+                        )
                     if result.no_trade_conditions:
-                        for c in result.no_trade_conditions:
-                            st.markdown(f"- {c}")
+                        ntc = "".join(f"<div style='padding:2px 0;color:#7f8c9a;font-size:0.78rem'>· {c}</div>" for c in result.no_trade_conditions)
+                        st.markdown(
+                            f"<div style='padding:8px 12px;background:rgba(255,51,102,0.05);"
+                            f"border:1px solid rgba(255,51,102,0.12);border-radius:8px;margin-bottom:6px'>"
+                            f"<div style=\"font-size:0.62rem;text-transform:uppercase;color:#ff3366;margin-bottom:4px\">İşlem Alınmaz</div>{ntc}</div>",
+                            unsafe_allow_html=True,
+                        )
 
                     kl = result.key_levels
                     lvl_r = kl.get("resistance", [])
@@ -929,19 +986,37 @@ elif page == "Otomatik Tarama":
                     if lvl_r or lvl_s:
                         lc1, lc2 = st.columns(2)
                         with lc1:
-                            st.markdown("**Direnç**")
-                            for lvl in lvl_r:
-                                st.markdown(f"🔴 {lvl}")
+                            r_items = "".join(
+                                f"<div style='padding:3px 0;font-family:\"JetBrains Mono\",monospace;font-size:0.8rem;"
+                                f"color:#e0e6ed;border-bottom:1px solid rgba(255,255,255,0.04)'>{lvl}</div>"
+                                for lvl in lvl_r
+                            )
+                            st.markdown(
+                                f"<div style='padding:8px 12px;background:rgba(255,51,102,0.04);"
+                                f"border:1px solid rgba(255,51,102,0.12);border-radius:8px'>"
+                                f"<div style=\"font-size:0.62rem;text-transform:uppercase;color:#ff3366;margin-bottom:6px\">▼ Direnç</div>"
+                                f"{r_items or '<span style=\"color:#3d4a58\">—</span>'}</div>",
+                                unsafe_allow_html=True,
+                            )
                         with lc2:
-                            st.markdown("**Destek**")
-                            for lvl in lvl_s:
-                                st.markdown(f"🟢 {lvl}")
+                            s_items = "".join(
+                                f"<div style='padding:3px 0;font-family:\"JetBrains Mono\",monospace;font-size:0.8rem;"
+                                f"color:#e0e6ed;border-bottom:1px solid rgba(255,255,255,0.04)'>{lvl}</div>"
+                                for lvl in lvl_s
+                            )
+                            st.markdown(
+                                f"<div style='padding:8px 12px;background:rgba(0,255,136,0.04);"
+                                f"border:1px solid rgba(0,255,136,0.12);border-radius:8px'>"
+                                f"<div style=\"font-size:0.62rem;text-transform:uppercase;color:#00ff88;margin-bottom:6px\">▲ Destek</div>"
+                                f"{s_items or '<span style=\"color:#3d4a58\">—</span>'}</div>",
+                                unsafe_allow_html=True,
+                            )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SAYFA: JOURNAL
 # ─────────────────────────────────────────────────────────────────────────────
 elif page == "Journal":
-    st.header("Trading Journal")
+    st.markdown("<div class='sec-lbl' style='font-size:0.8rem;margin-bottom:16px'>⬡ Trading Journal</div>", unsafe_allow_html=True)
 
     records = journal_service.get_recent_analyses(limit=200)
     stats   = journal_service.get_stats()
@@ -954,31 +1029,54 @@ elif page == "Journal":
     with tab_trade:
 
         # ── Üst istatistikler ─────────────────────────────────────
-        m1, m2, m3, m4, m5 = st.columns(5)
-        pnl_delta = f"${tstats['total_pnl']:+,.2f}"
-        pnl_color = "normal" if tstats["total_pnl"] >= 0 else "inverse"
-        m1.metric("Toplam İşlem",  tstats["total"])
-        m2.metric("Win Rate",      f"{tstats['winrate']}%",
-                  f"{tstats['wins']}W / {tstats['losses']}L / {tstats['be']}BE")
-        m3.metric("Ort. R:R",      tstats["avg_rr"])
-        m4.metric("Toplam P&L",    pnl_delta, delta_color=pnl_color)
-        m5.metric("Açık İşlem",    tstats["running"])
+        _pnl = tstats["total_pnl"]
+        _pnl_cls = "sn-pos" if _pnl >= 0 else "sn-neg"
+        _wr = tstats["winrate"]
+        _wr_cls = "sn-green" if _wr >= 50 else "sn-red"
+        st.markdown(f"""
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-num sn-white">{tstats['total']}</div>
+    <div class="stat-lbl">Toplam İşlem</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num {_wr_cls}">{_wr}%</div>
+    <div class="stat-lbl">Win Rate · <span style="color:#00ff88">{tstats['wins']}W</span> / <span style="color:#ff3366">{tstats['losses']}L</span> / <span style="color:#5a6878">{tstats['be']}BE</span></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num sn-blue">{tstats['avg_rr']}</div>
+    <div class="stat-lbl">Ort. R:R</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num {_pnl_cls}">${_pnl:+,.0f}</div>
+    <div class="stat-lbl">Toplam P&L</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num sn-blue">{tstats['running']}</div>
+    <div class="stat-lbl">Açık İşlem</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
         # ── Equity curve ──────────────────────────────────────────
         if tstats["equity_curve"]:
-            st.divider()
-            st.markdown("**Equity Curve**")
+            st.markdown("<div class='sec-lbl' style='margin-top:16px'>Equity Curve</div>", unsafe_allow_html=True)
             eq_data = {e["date"]: e["pnl"] for e in tstats["equity_curve"]}
             st.line_chart(eq_data, use_container_width=True, height=200)
 
-        st.divider()
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
         # ── Yeni işlem formu ──────────────────────────────────────
         pf = st.session_state.prefill_trade or {}
         form_open = bool(pf) or tstats["total"] == 0
 
         if pf:
-            st.info(f"📋 Alert'ten aktarıldı: **{pf.get('symbol')}** {pf.get('direction')} — {pf.get('notes','')}")
+            st.markdown(
+                f"<div style='padding:8px 14px;background:rgba(79,195,247,0.07);border:1px solid rgba(79,195,247,0.2);"
+                f"border-radius:8px;font-size:0.82rem;color:#4fc3f7;margin-bottom:8px'>"
+                f"Alert'ten aktarıldı: <b>{pf.get('symbol')}</b> {pf.get('direction')} — {pf.get('notes','')}</div>",
+                unsafe_allow_html=True,
+            )
 
         with st.expander("➕ Yeni İşlem Ekle", expanded=form_open):
             fc1, fc2 = st.columns(2)
@@ -1088,20 +1186,40 @@ elif page == "Journal":
             st.info("Henüz kayıtlı analiz yok. Analiz yapıp 'Journal'a Kaydet' butonuna bas.")
         else:
             # ── Üst metrikler ──────────────────────────────────────────────
-            c1, c2, c3, c4, c5 = st.columns(5)
-            c1.metric("Toplam Analiz", stats["total"])
-            c2.metric("Win Rate", f"{stats['winrate']}%", help="Sonucu işaretlenmiş analizlerde TP oranı")
-            c3.metric("Karar Verilen", stats["decided_count"], help="TP + SL + BE toplamı")
-            c4.metric("Ort. Güven", f"{stats['avg_confidence']}/10")
             rc = stats["result_counts"]
-            c5.metric("TP / SL / BE", f"{rc.get('TP',0)} / {rc.get('SL',0)} / {rc.get('BE',0)}")
+            _awr = stats["winrate"]
+            _awr_cls = "sn-green" if _awr >= 50 else "sn-red"
+            st.markdown(f"""
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="stat-num sn-white">{stats['total']}</div>
+    <div class="stat-lbl">Toplam Analiz</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num {_awr_cls}">{_awr}%</div>
+    <div class="stat-lbl">Win Rate</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num sn-blue">{stats['decided_count']}</div>
+    <div class="stat-lbl">Karar Verilen</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num sn-white">{stats['avg_confidence']}/10</div>
+    <div class="stat-lbl">Ort. Güven</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" style="font-size:1.2rem"><span style="color:#00ff88">{rc.get('TP',0)}</span> / <span style="color:#ff3366">{rc.get('SL',0)}</span> / <span style="color:#5a6878">{rc.get('BE',0)}</span></div>
+    <div class="stat-lbl">TP / SL / BE</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-            st.divider()
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
             col_bias, col_result = st.columns(2)
 
             with col_bias:
-                st.markdown("**Bias Dağılımı**")
+                st.markdown("<div class='sec-lbl'>Bias Dağılımı</div>", unsafe_allow_html=True)
                 bc = stats["bias_counts"]
                 if bc:
                     bias_order = ["BULLISH", "BEARISH", "RANGING", "NO_TRADE", "INSUFFICIENT_DATA"]
@@ -1109,17 +1227,17 @@ elif page == "Journal":
                     st.bar_chart(bias_data, use_container_width=True, height=200)
 
             with col_result:
-                st.markdown("**Sonuç Dağılımı**")
+                st.markdown("<div class='sec-lbl'>Sonuç Dağılımı</div>", unsafe_allow_html=True)
                 rc_clean = {k: v for k, v in stats["result_counts"].items() if v > 0}
                 if rc_clean:
                     st.bar_chart(rc_clean, use_container_width=True, height=200)
                 else:
                     st.caption("Henüz sonuç işaretlenmedi.")
 
-            st.divider()
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
             # ── Güven skoru analizi ─────────────────────────────────────────
-            st.markdown("**Güven Skoru vs Win Rate**")
+            st.markdown("<div class='sec-lbl'>Güven Skoru vs Win Rate</div>", unsafe_allow_html=True)
             conf_cols = st.columns(4)
             for i, cs in enumerate(stats["confidence_stats"]):
                 with conf_cols[i]:
@@ -1132,19 +1250,19 @@ elif page == "Journal":
                         delta_color=color,
                     )
 
-            st.divider()
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
             # ── Sembol bazlı ────────────────────────────────────────────────
             col_sym, col_trend = st.columns(2)
 
             with col_sym:
-                st.markdown("**Sembol Bazlı Analiz Sayısı**")
+                st.markdown("<div class='sec-lbl'>Sembol Bazlı Analiz</div>", unsafe_allow_html=True)
                 sym_data = {k: v["count"] for k, v in stats["symbol_stats"].items()}
                 if sym_data:
                     st.bar_chart(sym_data, use_container_width=True, height=180)
 
             with col_trend:
-                st.markdown("**Son 30 Gün Günlük Analiz**")
+                st.markdown("<div class='sec-lbl'>Son 30 Gün Trend</div>", unsafe_allow_html=True)
                 if stats["daily_trend"]:
                     st.bar_chart(stats["daily_trend"], use_container_width=True, height=180)
                 else:
@@ -1363,23 +1481,33 @@ elif page == "Alertler":
 """, unsafe_allow_html=True)
 
     # ── Başlık & durum ────────────────────────────────────────────
-    st.header("Sinyal Akışı")
+    st.markdown("<div class='sec-lbl' style='font-size:0.8rem;margin-bottom:16px'>⬡ Sinyal Akışı</div>", unsafe_allow_html=True)
 
     cf_url_file  = Path(__file__).parent / ".cloudflare_url"
     webhook_port = os.getenv("WEBHOOK_PORT", "8080")
     cf_url = cf_url_file.read_text().strip() if cf_url_file.exists() else ""
 
-    status_col, url_col = st.columns([1, 3])
-    with status_col:
-        if cf_url:
-            st.success("🟢 Webhook aktif")
-        else:
-            st.warning("🟡 Cloudflare kapalı")
-    with url_col:
-        if cf_url:
-            st.code(f"{cf_url}/webhook/tradingview", language="text")
-        else:
-            st.caption("Başlat: `./start_webhook.sh`")
+    _wh_dot = "dot-on" if cf_url else "dot-warn"
+    _wh_lbl = "Webhook Aktif" if cf_url else "Cloudflare Kapalı"
+    _wh_clr = "#00ff88" if cf_url else "#ffd32a"
+    _wh_bg  = "rgba(0,255,136,0.05)" if cf_url else "rgba(255,211,42,0.05)"
+    _wh_br  = "rgba(0,255,136,0.18)" if cf_url else "rgba(255,211,42,0.18)"
+    _url_html = (
+        f"<code style='background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:4px;"
+        f"font-size:0.78rem;color:#c0cad6'>{cf_url}/webhook/tradingview</code>"
+        if cf_url else
+        "<span style='color:#3d4a58;font-size:0.8rem'>Başlat: <code style=\"color:#5a6878\">./start_webhook.sh</code></span>"
+    )
+    st.markdown(f"""
+<div style="display:flex;align-items:center;gap:14px;padding:10px 18px;background:{_wh_bg};
+border:1px solid {_wh_br};border-radius:10px;margin-bottom:14px">
+  <span class="{_wh_dot}" style="display:inline-block;flex-shrink:0"></span>
+  <span style="font-size:0.75rem;color:{_wh_clr};font-family:'JetBrains Mono',monospace;
+  text-transform:uppercase;letter-spacing:0.08em;white-space:nowrap">{_wh_lbl}</span>
+  <span style="color:rgba(255,255,255,0.08)">|</span>
+  {_url_html}
+</div>
+""", unsafe_allow_html=True)
 
     # ── Kontroller ────────────────────────────────────────────────
     ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 4])
@@ -1412,7 +1540,7 @@ elif page == "Alertler":
         with s4:
             st.markdown(f'<div class="stat-box"><div class="stat-num" style="color:#64b5f6">{htf_today}</div><div class="stat-lbl">HTF sinyal bugün</div></div>', unsafe_allow_html=True)
 
-    st.divider()
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
     # ── Filtre ────────────────────────────────────────────────────
     if alerts:
@@ -1454,27 +1582,81 @@ elif page == "Alertler":
 # SAYFA: HAKKINDA
 # ─────────────────────────────────────────────────────────────────────────────
 elif page == "Hakkında":
-    st.header("Yemre AI Trading Desk")
+    st.markdown("<div class='sec-lbl' style='font-size:0.8rem;margin-bottom:20px'>⬡ Sistem Hakkında</div>", unsafe_allow_html=True)
+
+    _api_h = bool(os.getenv("ANTHROPIC_API_KEY"))
+    _tg_h  = bool(os.getenv("TELEGRAM_BOT_TOKEN"))
+    _tv_h  = tradingview_service.has_session()
+    st.markdown(f"""
+<div style="background:linear-gradient(135deg,rgba(79,195,247,0.06),rgba(79,195,247,0.02));
+border:1px solid rgba(79,195,247,0.15);border-radius:16px;padding:28px 32px;margin-bottom:20px">
+  <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.2em;color:#4fc3f7;margin-bottom:12px">
+    AI Destekli Trading Karar Destek Sistemi
+  </div>
+  <div style="font-size:1.8rem;font-weight:700;color:#e0e6ed;font-family:'JetBrains Mono',monospace;letter-spacing:0.04em">
+    YEMRE AI TRADING DESK
+  </div>
+  <div style="font-size:0.78rem;color:#5a6878;margin-top:8px;font-family:'JetBrains Mono',monospace">
+    v0.6 — LTF Sinyal Motoru Aktif
+  </div>
+  <div style="display:flex;gap:20px;margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06)">
+    <div style="display:flex;align-items:center;gap:7px;font-size:0.72rem;font-family:'JetBrains Mono',monospace">
+      <span class="{'dot-on' if _api_h else 'dot-off'}" style="display:inline-block"></span>
+      <span style="color:#5a6878;text-transform:uppercase;letter-spacing:0.08em">Claude API</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;font-size:0.72rem;font-family:'JetBrains Mono',monospace">
+      <span class="{'dot-on' if _tg_h else 'dot-off'}" style="display:inline-block"></span>
+      <span style="color:#5a6878;text-transform:uppercase;letter-spacing:0.08em">Telegram</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;font-size:0.72rem;font-family:'JetBrains Mono',monospace">
+      <span class="{'dot-on' if _tv_h else 'dot-warn'}" style="display:inline-block"></span>
+      <span style="color:#5a6878;text-transform:uppercase;letter-spacing:0.08em">TradingView</span>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    _modules = [
+        ("#00ff88", "▲", "Chart AI Analyzer",
+         "Claude Vision ile grafik analizi. Bias, seviyeler, senaryo ve Telegram mesajı üretir."),
+        ("#00ff88", "▲", "Otomatik MTF Tarama",
+         "5M → 1D arası 7 timeframe'i TradingView'dan çekip analiz eder. Playwright otomasyonu."),
+        ("#4fc3f7", "◆", "Trading Journal",
+         "SQLite tabanlı işlem ve analiz geçmişi. Equity curve, win rate, P&L ve R:R takibi."),
+        ("#4fc3f7", "◆", "Telegram Multi-Kanal",
+         "VIP / Public / Varsayılan kanallara metin veya fotoğraflı analiz gönderimi."),
+        ("#ffd32a", "⬡", "TradingView Webhook",
+         "Pine Script alert → FastAPI + Cloudflare Tunnel → canlı sinyal akışı. Port 8080."),
+        ("#ffd32a", "⬡", "LTF Sinyal Motoru",
+         "HTF bias takibi + 5M GATE alignment doğrulaması. SQLite ile kalıcı durum."),
+    ]
+
+    _mod_cols = st.columns(2)
+    for i, (color, icon, title, desc) in enumerate(_modules):
+        with _mod_cols[i % 2]:
+            st.markdown(f"""
+<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);
+border-left:3px solid {color};border-radius:10px;padding:14px 18px;margin-bottom:10px">
+  <div style="font-size:0.72rem;font-weight:700;color:{color};font-family:'JetBrains Mono',monospace;
+  letter-spacing:0.06em;margin-bottom:6px">{icon} {title.upper()}</div>
+  <div style="font-size:0.8rem;color:#5a6878;line-height:1.55">{desc}</div>
+</div>""", unsafe_allow_html=True)
+
     st.markdown("""
-**Versiyon:** 0.5
-
-**Bu sistem nedir?**
-AI destekli hibrit trading karar destek sistemi. Otomatik işlem açmaz.
-Trader'ın kendi strateji kurallarına göre grafik analizi yapar ve Telegram için mesaj üretir.
-
-**Mevcut Modüller:**
-- Chart AI Analyzer (Claude Vision)
-- Otomatik Çok Timeframe Tarama (TradingView + Playwright)
-- Trading Journal (SQLite) + Performans Dashboard
-- Risk & Pozisyon Hesaplayıcı
-- Telegram: Multi-kanal (VIP / Public / Varsayılan) + Fotoğraflı gönderim
-- TradingView Alert Webhook (`python webhook_server.py` ile ayrı çalışır)
-
-**Yakında (v0.6+):**
-- LTF Sinyal Motoru
-- Haftalık Performans Özeti (otomatik Telegram)
-- Webhook → otomatik screenshot + AI analiz pipeline
-
----
-*Bu uygulama yatırım tavsiyesi vermez. Tüm kararlar kullanıcıya aittir.*
-""")
+<div style="margin-top:16px;padding:16px 20px;background:rgba(255,51,102,0.04);
+border:1px solid rgba(255,51,102,0.12);border-radius:10px">
+  <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.14em;color:#ff3366;margin-bottom:10px">
+    Güvenlik Kuralları
+  </div>
+  <div style="display:flex;flex-direction:column;gap:5px;font-size:0.8rem;color:#7f8c9a">
+    <div>· Otomatik emir gönderimi kesinlikle yok</div>
+    <div>· Telegram gönderimi kullanıcı onayı gerektirir</div>
+    <div>· API key'ler sadece .env dosyasında — koda yazılmaz</div>
+    <div>· Exchange API entegrasyonu bu versiyonda yok</div>
+  </div>
+</div>
+<div style="margin-top:12px;text-align:center;font-size:0.68rem;color:#2a3440;
+font-family:'JetBrains Mono',monospace;padding:8px">
+  Bu uygulama yatırım tavsiyesi vermez. Tüm kararlar kullanıcıya aittir.
+</div>
+""", unsafe_allow_html=True)
