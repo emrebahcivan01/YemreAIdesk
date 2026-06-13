@@ -25,8 +25,15 @@ st.markdown("""
 
 /* ── Base ── */
 html, body, [data-testid="stAppViewContainer"] {
-    background: #070a0f !important;
+    background-color: #070a0f !important;
     font-family: 'Inter', sans-serif;
+}
+html {
+    background-image:
+        radial-gradient(circle, rgba(79,195,247,0.032) 1px, transparent 1px),
+        radial-gradient(ellipse at 78% 8%, rgba(15,40,110,0.45) 0%, transparent 52%) !important;
+    background-size: 44px 44px, 100% 100% !important;
+    background-attachment: fixed !important;
 }
 [data-testid="stSidebar"] {
     background: #090c13 !important;
@@ -202,6 +209,28 @@ h1,h2,h3,h4,h5 { color: #e0e6ed !important; }
 .stat-box   { text-align:center;padding:10px;border-radius:8px;background:rgba(255,255,255,0.03); }
 .stat-num   { font-size:1.6rem;font-weight:700; }
 .stat-lbl   { font-size:0.72rem;color:#5a6878; }
+
+/* ── Market Sessions Bar ── */
+.sess-bar {
+    display:flex; align-items:stretch; margin-bottom:14px;
+    background:rgba(255,255,255,0.02);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:10px; overflow:hidden;
+}
+.sess-item {
+    display:flex; align-items:center; gap:9px; padding:10px 20px;
+    border-right:1px solid rgba(255,255,255,0.05); flex:1;
+}
+.sess-item:last-child { border-right:none; }
+.sess-dot  { width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0; }
+.sess-on   { background:#00ff88;box-shadow:0 0 7px #00ff88; }
+.sess-off  { background:#1e2a38; }
+.sess-city { font-size:0.62rem;color:#3d4a58;text-transform:uppercase;
+    letter-spacing:0.1em;font-family:'JetBrains Mono',monospace; }
+.sess-time { font-size:0.9rem;font-weight:600;color:#8a9bb0;
+    font-family:'JetBrains Mono',monospace;margin-left:auto; }
+.sess-utc  { font-size:0.7rem;color:#2a3440;font-family:'JetBrains Mono',monospace;
+    margin-left:auto; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -328,6 +357,62 @@ if page == "Dashboard":
     <span style="font-size:0.72rem;color:#3d4a58;font-family:'JetBrains Mono',monospace">{now_utc}</span>
   </div>
 </div>
+""", unsafe_allow_html=True)
+
+    # ── Market Sessions Bar ───────────────────────────────────────
+    st.markdown("""
+<div class="sess-bar">
+  <div class="sess-item">
+    <span class="sess-dot sess-off" id="dot-london"></span>
+    <span class="sess-city">LONDON</span>
+    <span class="sess-time" id="sess-london">--:--</span>
+  </div>
+  <div class="sess-item">
+    <span class="sess-dot sess-off" id="dot-newyork"></span>
+    <span class="sess-city">NEW YORK</span>
+    <span class="sess-time" id="sess-newyork">--:--</span>
+  </div>
+  <div class="sess-item">
+    <span class="sess-dot sess-off" id="dot-dubai"></span>
+    <span class="sess-city">DUBAI</span>
+    <span class="sess-time" id="sess-dubai">--:--</span>
+  </div>
+  <div class="sess-item">
+    <span class="sess-dot sess-off" id="dot-tokyo"></span>
+    <span class="sess-city">TOKYO</span>
+    <span class="sess-time" id="sess-tokyo">--:--</span>
+  </div>
+  <div class="sess-item" style="border-right:none;justify-content:flex-end;flex:0 0 auto;padding-right:22px">
+    <span class="sess-utc" id="sess-utc-clock"></span>
+  </div>
+</div>
+<script>
+(function(){
+  function _p(n){return String(n).padStart(2,'0');}
+  var zones=[
+    {t:'sess-london', d:'dot-london', off:1, o:8, c:17},
+    {t:'sess-newyork', d:'dot-newyork', off:-4, o:9, c:17},
+    {t:'sess-dubai', d:'dot-dubai', off:4, o:8, c:17},
+    {t:'sess-tokyo', d:'dot-tokyo', off:9, o:9, c:18}
+  ];
+  function _run(){
+    var now=new Date();
+    var utcMs=now.getTime()+now.getTimezoneOffset()*60000;
+    zones.forEach(function(z){
+      var ct=new Date(utcMs+z.off*3600000);
+      var h=ct.getHours(),m=ct.getMinutes();
+      var te=document.getElementById(z.t);
+      if(te) te.textContent=_p(h)+':'+_p(m);
+      var de=document.getElementById(z.d);
+      if(de) de.className='sess-dot '+(h>=z.o&&h<z.c?'sess-on':'sess-off');
+    });
+    var uc=document.getElementById('sess-utc-clock');
+    if(uc) uc.textContent='UTC '+_p(now.getUTCHours())+':'+_p(now.getUTCMinutes())+':'+_p(now.getUTCSeconds());
+  }
+  _run();
+  setInterval(_run,1000);
+})();
+</script>
 """, unsafe_allow_html=True)
 
     _, ref_col = st.columns([8, 1])
