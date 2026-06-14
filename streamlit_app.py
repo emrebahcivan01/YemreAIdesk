@@ -1,5 +1,6 @@
 import sys
 import os
+import subprocess
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -234,6 +235,51 @@ h1,h2,h3,h4,h5 { color: #e0e6ed !important; }
 </style>
 """, unsafe_allow_html=True)
 
+_CF_SSH_KEY  = os.path.expanduser("~/.ssh/do_haber_bot")
+_CF_SERVER   = "root@64.226.77.18"
+_CF_REMOTE   = "/root/YemreAIdesk/.cloudflare_url"
+_CF_LOCAL    = Path(__file__).parent / ".cloudflare_url"
+
+
+@st.cache_data(ttl=180)
+def _get_cf_url() -> str:
+    """Cloudflare tunnel URL'ini döndür. Yerel dosya yoksa SSH ile sunucudan çek."""
+    url = _CF_LOCAL.read_text().strip() if _CF_LOCAL.exists() else ""
+    if url:
+        return url
+    try:
+        r = subprocess.run(
+            ["ssh", "-i", _CF_SSH_KEY, "-o", "StrictHostKeyChecking=no",
+             "-o", "ConnectTimeout=5", _CF_SERVER, f"cat {_CF_REMOTE}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        new_url = r.stdout.strip()
+        if new_url.startswith("https://"):
+            _CF_LOCAL.write_text(new_url)
+            return new_url
+    except Exception:
+        pass
+    return ""
+
+
+def _sync_cf_url() -> str:
+    """Sunucudan URL'yi zorla çek, yerel dosyayı güncelle, cache'i temizle."""
+    try:
+        r = subprocess.run(
+            ["ssh", "-i", _CF_SSH_KEY, "-o", "StrictHostKeyChecking=no",
+             "-o", "ConnectTimeout=5", _CF_SERVER, f"cat {_CF_REMOTE}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        new_url = r.stdout.strip()
+        if new_url.startswith("https://"):
+            _CF_LOCAL.write_text(new_url)
+            _get_cf_url.clear()
+            return new_url
+    except Exception:
+        pass
+    return ""
+
+
 # ─── Sidebar ────────────────────────────────────────────────────────────────
 if "page" not in st.session_state:
     st.session_state.page = "Dashboard"
@@ -323,8 +369,7 @@ if page == "Dashboard":
                          or "BEAR GATE" in a.get("message","").upper()), None)
     running_trades = [t for t in trades if t.get("result") == "RUNNING"]
 
-    cf_url_file = Path(__file__).parent / ".cloudflare_url"
-    cf_url  = cf_url_file.read_text().strip() if cf_url_file.exists() else ""
+    cf_url  = _get_cf_url()
     api_ok  = bool(os.getenv("ANTHROPIC_API_KEY"))
     tg_ok   = bool(os.getenv("TELEGRAM_BOT_TOKEN"))
     wh_ok   = bool(cf_url)
@@ -357,62 +402,6 @@ if page == "Dashboard":
     <span style="font-size:0.72rem;color:#3d4a58;font-family:'JetBrains Mono',monospace">{now_utc}</span>
   </div>
 </div>
-""", unsafe_allow_html=True)
-
-    # ── Market Sessions Bar ───────────────────────────────────────
-    st.markdown("""
-<div class="sess-bar">
-  <div class="sess-item">
-    <span class="sess-dot sess-off" id="dot-london"></span>
-    <span class="sess-city">LONDON</span>
-    <span class="sess-time" id="sess-london">--:--</span>
-  </div>
-  <div class="sess-item">
-    <span class="sess-dot sess-off" id="dot-newyork"></span>
-    <span class="sess-city">NEW YORK</span>
-    <span class="sess-time" id="sess-newyork">--:--</span>
-  </div>
-  <div class="sess-item">
-    <span class="sess-dot sess-off" id="dot-dubai"></span>
-    <span class="sess-city">DUBAI</span>
-    <span class="sess-time" id="sess-dubai">--:--</span>
-  </div>
-  <div class="sess-item">
-    <span class="sess-dot sess-off" id="dot-tokyo"></span>
-    <span class="sess-city">TOKYO</span>
-    <span class="sess-time" id="sess-tokyo">--:--</span>
-  </div>
-  <div class="sess-item" style="border-right:none;justify-content:flex-end;flex:0 0 auto;padding-right:22px">
-    <span class="sess-utc" id="sess-utc-clock"></span>
-  </div>
-</div>
-<script>
-(function(){
-  function _p(n){return String(n).padStart(2,'0');}
-  var zones=[
-    {t:'sess-london', d:'dot-london', off:1, o:8, c:17},
-    {t:'sess-newyork', d:'dot-newyork', off:-4, o:9, c:17},
-    {t:'sess-dubai', d:'dot-dubai', off:4, o:8, c:17},
-    {t:'sess-tokyo', d:'dot-tokyo', off:9, o:9, c:18}
-  ];
-  function _run(){
-    var now=new Date();
-    var utcMs=now.getTime()+now.getTimezoneOffset()*60000;
-    zones.forEach(function(z){
-      var ct=new Date(utcMs+z.off*3600000);
-      var h=ct.getHours(),m=ct.getMinutes();
-      var te=document.getElementById(z.t);
-      if(te) te.textContent=_p(h)+':'+_p(m);
-      var de=document.getElementById(z.d);
-      if(de) de.className='sess-dot '+(h>=z.o&&h<z.c?'sess-on':'sess-off');
-    });
-    var uc=document.getElementById('sess-utc-clock');
-    if(uc) uc.textContent='UTC '+_p(now.getUTCHours())+':'+_p(now.getUTCMinutes())+':'+_p(now.getUTCSeconds());
-  }
-  _run();
-  setInterval(_run,1000);
-})();
-</script>
 """, unsafe_allow_html=True)
 
     _, ref_col = st.columns([8, 1])
@@ -1568,9 +1557,7 @@ elif page == "Alertler":
     # ── Başlık & durum ────────────────────────────────────────────
     st.markdown("<div class='sec-lbl' style='font-size:0.8rem;margin-bottom:16px'>⬡ Sinyal Akışı</div>", unsafe_allow_html=True)
 
-    cf_url_file  = Path(__file__).parent / ".cloudflare_url"
-    webhook_port = os.getenv("WEBHOOK_PORT", "8080")
-    cf_url = cf_url_file.read_text().strip() if cf_url_file.exists() else ""
+    cf_url = _get_cf_url()
 
     _wh_dot = "dot-on" if cf_url else "dot-warn"
     _wh_lbl = "Webhook Aktif" if cf_url else "Cloudflare Kapalı"
@@ -1595,12 +1582,20 @@ border:1px solid {_wh_br};border-radius:10px;margin-bottom:14px">
 """, unsafe_allow_html=True)
 
     # ── Kontroller ────────────────────────────────────────────────
-    ctrl1, ctrl2, ctrl3 = st.columns([1, 1, 4])
+    ctrl1, ctrl2, ctrl3, ctrl4 = st.columns([1, 1, 1, 3])
     with ctrl1:
-        if st.button("🔄 Yenile", use_container_width=True):
+        if st.button("↺ Yenile", use_container_width=True):
             st.rerun()
     with ctrl2:
         auto_refresh = st.toggle("Otomatik", value=False)
+    with ctrl3:
+        if st.button("⟳ URL Sync", use_container_width=True, help="Sunucudan webhook URL'ini çek"):
+            new_url = _sync_cf_url()
+            if new_url:
+                st.toast(f"URL güncellendi: {new_url[:40]}…")
+            else:
+                st.toast("Sunucuya bağlanılamadı", icon="⚠")
+            st.rerun()
 
     # ── Alertleri çek ─────────────────────────────────────────────
     alerts = journal_service.get_recent_alerts(limit=200)
