@@ -118,8 +118,8 @@ def capture_all_timeframes(
 
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            headless=False,
-            args=["--disable-blink-features=AutomationControlled", "--start-maximized"],
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
         context = browser.new_context(
             storage_state=storage_path,
