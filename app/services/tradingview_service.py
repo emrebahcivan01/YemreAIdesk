@@ -66,10 +66,10 @@ def _hide_watchlist(page):
 
 def _wait_for_chart(page):
     try:
-        page.wait_for_selector("canvas", timeout=10000)
+        page.wait_for_selector("canvas", timeout=12000)
+        time.sleep(3)
     except PWTimeout:
-        pass
-    time.sleep(5)
+        time.sleep(2)
 
 
 def do_login_and_save() -> bool:
@@ -134,7 +134,7 @@ def capture_all_timeframes(
 
             url = _chart_url(symbol, interval, chart_id)
             try:
-                page.goto(url, wait_until="load", timeout=30000)
+                page.goto(url, wait_until="domcontentloaded", timeout=20000)
             except PWTimeout:
                 pass
 
@@ -184,7 +184,7 @@ def capture_single(symbol: str, timeframe: str, chart_id: str = "") -> bytes:
         page = context.new_page()
         url = _chart_url(symbol, interval, chart_id)
         try:
-            page.goto(url, wait_until="load", timeout=30000)
+            page.goto(url, wait_until="domcontentloaded", timeout=20000)
         except PWTimeout:
             pass
         _dismiss_popups(page)
